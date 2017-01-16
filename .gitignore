@@ -1,5 +1,5 @@
 *.csr
 *.key
 *.crt
-config/default.json
+/config/default.json
 
