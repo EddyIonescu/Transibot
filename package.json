@@ -1,7 +1,7 @@
 {
-  "name": "messenger-get-started",
+  "name": "Transibot",
   "version": "1.0.0",
-  "description": "Get started example for Messenger Platform",
+  "description": "Chatbot for buses",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
@@ -10,9 +10,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/fbsamples/messenger-platform-samples.git"
+    "url": "https://github.com/eddyionescu/Transibot.git"
   },
-  "author": "Facebook",
+  "author": "Eddy",
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.15.0",

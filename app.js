@@ -16,7 +16,8 @@ const
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
-  request = require('request');
+  request = require('request'),
+  transitime = require('./transitime');
 
 var app = express();
 app.set('port', process.env.PORT || 5000);
@@ -311,7 +312,25 @@ function receivedMessage(event) {
         sendTextMessage(senderID, messageText);
     }
   } else if (messageAttachments) {
-    sendTextMessage(senderID, "Message with attachment received");
+	   if(message.attachments[0].type == 'location') {
+		    sendTextMessage(senderID, message.attachments[0].payload.coordinates.lat);
+
+        sendTextMessage(senderID, message.attachments[0].payload.coordinates.long);
+
+        var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
+            message.attachments[0].payload.coordinates.long);
+        var stops = stopsTuple[0];
+        var closestStops = stopsTuple[1];
+
+        var stop1 = stops[closestStops[0].key];
+        sendTextMessage(senderID, `Closest Stop: ${stop1.name} (${stop1.id})`);
+
+        var nextBus = transitime.getNextBuses(stops[closestStops[0].key]);
+        console.log(nextBus);
+        sendTextMessage(senderID, `Next Buses: ${nextBus}`);
+        
+        
+	   }
   }
 }
 
