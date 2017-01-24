@@ -313,9 +313,9 @@ function receivedMessage(event) {
     }
   } else if (messageAttachments) {
 	   if(message.attachments[0].type == 'location') {
-		    sendTextMessage(senderID, message.attachments[0].payload.coordinates.lat);
+		    //sendTextMessage(senderID, message.attachments[0].payload.coordinates.lat);
 
-        sendTextMessage(senderID, message.attachments[0].payload.coordinates.long);
+        //sendTextMessage(senderID, message.attachments[0].payload.coordinates.long);
 
         var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
             message.attachments[0].payload.coordinates.long);
@@ -325,10 +325,9 @@ function receivedMessage(event) {
         var stop1 = stops[closestStops[0].key];
         sendTextMessage(senderID, `Closest Stop: ${stop1.name} (${stop1.id})`);
 
-        var nextBus = transitime.getNextBuses(stops[closestStops[0].key]);
+        // also sends the texts
+        var nextBus = transitime.getNextBuses(stops[closestStops[0].key], senderID, sendTextMessage);
         console.log(nextBus);
-        sendTextMessage(senderID, `Next Buses: ${nextBus}`);
-        
         
 	   }
   }
