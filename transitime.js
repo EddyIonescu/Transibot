@@ -23,7 +23,28 @@ module.exports = {
 
 	},
 
-	getNextBuses: function (stop, senderID, sendTextMessage) {
+	// sorted stops -> stop ID
+	getWhichStop: function(senderID, callSendAPI, stops, keys) {
+		var messageData = {
+				recipient: {
+					id: senderID
+				},
+				message: {
+					text: "Which stop?",
+					quick_replies: [
+						{
+							content_type: "text",
+							title: "Red",
+        					payload: "DEVELOPER_DEFINED_PAYLOAD_FOR_PICKING_RED"
+						},
+					]
+				}
+			};
+			console.log(messageData);
+			callSendAPI(messageData);
+	},
+
+	getNextBuses: function (stop, senderID, sendTextMessage, callSendAPI) {
 
 		return new Promise(
 			function (resolve, reject) {
@@ -87,9 +108,6 @@ module.exports = {
 
 										const seconds = arrival.departure;
 										answer += `${fromSeconds(seconds)} \n`;
-
-										
-								
 									}
 								}
 							}
@@ -101,19 +119,40 @@ module.exports = {
 					reject("GRT could not be reached");
 				})
 			}).then(
-			function (answer) {
-				console.log("Success");
-				console.log(answer);
-				sendTextMessage(senderID, `Next Buses: ${answer}`);
-				return answer;
-			}
+				function (answer) {
+					console.log("Success");
+					console.log(answer);
+					sendTextMessage(senderID, `Next Buses: ${answer}`);
+
+					// longer message above takes longer to send; want to ensure this message is the last one
+					setTimeout(requestLocation, 2000);
+					function requestLocation() {
+						// so that the user can get updated times, re-request location
+						var messageData = {
+							recipient: {
+								id: senderID
+							},
+							message: {
+								text: "Where are you?",
+								quick_replies: [
+									{
+										content_type: "location",
+									},
+								]
+							}
+						};
+						console.log(messageData);
+						callSendAPI(messageData);
+					}
+					return answer;
+				}
 			).catch(
-			function (errorMessage) {
-				console.log("Error");
-				console.log(errorMessage);
-				sendTextMessage(senderID, errorMessage);
-				return errorMessage;
-			}
+				function (errorMessage) {
+					console.log("Error");
+					console.log(errorMessage);
+					sendTextMessage(senderID, errorMessage);
+					return errorMessage;
+				}
 			);
 	}
 };

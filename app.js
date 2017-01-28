@@ -84,7 +84,7 @@ app.get('/webhook', function(req, res) {
  */
 app.post('/webhook', function (req, res) {
   var data = req.body;
-
+ console.log("webhook called");
   // Make sure this is a page subscription
   if (data.object == 'page') {
     // Iterate over each entry
@@ -103,6 +103,8 @@ app.post('/webhook', function (req, res) {
           receivedDeliveryConfirmation(messagingEvent);
         } else if (messagingEvent.postback) {
           receivedPostback(messagingEvent);
+        } else if(messagingEvent.referral) {
+          receivedReferral(messagingEvent);
         } else if (messagingEvent.read) {
           receivedMessageRead(messagingEvent);
         } else if (messagingEvent.account_linking) {
@@ -321,36 +323,20 @@ function receivedMessage(event) {
         var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
             message.attachments[0].payload.coordinates.long, grt_stops);
         var stops = stopsTuple[0];
-        var closestStops = stopsTuple[1];
+        var closestStopsKeys = stopsTuple[1];
 
-        var stop1 = stops[closestStops[0].key];
+        transitime.getWhichStop(senderID, callSendAPI, stops, closestStopsKeys);
+
+        var stop1 = stops[closestStopsKeys[0].key];
         sendTextMessage(senderID, `Closest Stop: ${stop1.name} (${stop1.id})`);
 
         // also sends the texts
-        var nextBus = transitime.getNextBuses(stops[closestStops[0].key], senderID, sendTextMessage);
+        var nextBus = transitime.getNextBuses(stops[closestStops[0].key], senderID, sendTextMessage, callSendAPI);
         console.log(nextBus);
-        
 	   }
   }
 }
 
-// Ask for location
-function sendLocationRequest(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      //text: "Where are you?",
-      quick_reply: {
-        content_type: "location",
-        title: "Where are you?"
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
 
 /*
  * Delivery Confirmation Event
@@ -378,7 +364,8 @@ function receivedDeliveryConfirmation(event) {
 }
 
 // Referral Event (recent - when user opens existing thread)
-function recievedReferral(event) {
+function receivedReferral(event) {
+  console.log("recieved referral");
   var recipientID = event.recipient.id;
   sendLocationRequest(receiptID);
 }
