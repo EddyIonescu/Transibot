@@ -17,7 +17,8 @@ const
   express = require('express'),
   https = require('https'),  
   request = require('request'),
-  transitime = require('./transitime');
+  grt_stops = require('./grt_stops.js'),
+  transitime = require('./transitime.js');
 
 var app = express();
 app.set('port', process.env.PORT || 5000);
@@ -257,39 +258,39 @@ function receivedMessage(event) {
     // the text we received.
     switch (messageText) {
       case 'image':
-        sendImageMessage(senderID);
+        //sendImageMessage(senderID);
         break;
 
       case 'gif':
-        sendGifMessage(senderID);
+        //sendGifMessage(senderID);
         break;
 
       case 'audio':
-        sendAudioMessage(senderID);
+        //sendAudioMessage(senderID);
         break;
 
       case 'video':
-        sendVideoMessage(senderID);
+        //sendVideoMessage(senderID);
         break;
 
       case 'file':
-        sendFileMessage(senderID);
+        //sendFileMessage(senderID);
         break;
 
       case 'button':
-        sendButtonMessage(senderID);
+        //sendButtonMessage(senderID);
         break;
 
       case 'generic':
-        sendGenericMessage(senderID);
+        //sendGenericMessage(senderID);
         break;
 
       case 'receipt':
-        sendReceiptMessage(senderID);
+        //sendReceiptMessage(senderID);
         break;
 
       case 'quick reply':
-        sendQuickReply(senderID);
+        //sendQuickReply(senderID);
         break;        
 
       case 'read receipt':
@@ -318,7 +319,7 @@ function receivedMessage(event) {
         //sendTextMessage(senderID, message.attachments[0].payload.coordinates.long);
 
         var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
-            message.attachments[0].payload.coordinates.long);
+            message.attachments[0].payload.coordinates.long, grt_stops);
         var stops = stopsTuple[0];
         var closestStops = stopsTuple[1];
 
@@ -333,6 +334,23 @@ function receivedMessage(event) {
   }
 }
 
+// Ask for location
+function sendLocationRequest(recipientId) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      //text: "Where are you?",
+      quick_reply: {
+        content_type: "location",
+        title: "Where are you?"
+      }
+    }
+  };
+
+  callSendAPI(messageData);
+}
 
 /*
  * Delivery Confirmation Event
@@ -359,7 +377,13 @@ function receivedDeliveryConfirmation(event) {
   console.log("All message before %d were delivered.", watermark);
 }
 
+// Referral Event (recent - when user opens existing thread)
+function recievedReferral(event) {
+  var recipientID = event.recipient.id;
+  sendLocationRequest(receiptID);
+}
 
+// When new user initiates conversation, ask for their location
 /*
  * Postback Event
  *
@@ -381,7 +405,8 @@ function receivedPostback(event) {
 
   // When a postback is called, we'll send a message back to the sender to 
   // let them know it was successful
-  sendTextMessage(senderID, "Postback called");
+  sendLocationRequest(receiptID);
+  //sendTextMessage(senderID, "Postback called");
 }
 
 /*
