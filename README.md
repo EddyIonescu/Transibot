@@ -9,7 +9,7 @@ How it works:
 3. Transibot shows the times of the next few buses for the routes serving that stop.
 
 You can try it out here:
-<a href="m.me/Transibot">m.me/Transibot</a>
+<a href="https://m.me/Transibot">m.me/Transibot</a>
 
 
 
