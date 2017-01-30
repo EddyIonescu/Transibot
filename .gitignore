@@ -2,6 +2,7 @@
 *.key
 *.crt
 /config/default.json
+/config/*
 .DS_Store
 *.zip
 
