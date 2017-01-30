@@ -4,7 +4,7 @@
 
 const 
   bodyParser = require('body-parser'),
-  config = require('./config/prodConfig.json'),
+  config = require('./config/devConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
