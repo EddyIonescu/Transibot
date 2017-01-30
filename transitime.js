@@ -54,7 +54,7 @@ module.exports = {
 					id: senderID
 				},
 				message: {
-					text: "Sorry, there are no stops within 1 km.",
+					text: "Sorry, there are no stops within 1 km. Are you in Waterloo Region, Canada?",
 					quick_replies: [
 								{
 									content_type: "location",
