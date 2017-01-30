@@ -1,6 +1,3 @@
-# Transibot
-
-FB Messenger Bot that tells users when their next bus will arrive.
 
 How it works:
 

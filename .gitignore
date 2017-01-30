@@ -3,4 +3,5 @@
 *.crt
 /config/default.json
 .DS_Store
+*.zip
 
