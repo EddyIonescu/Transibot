@@ -48,14 +48,14 @@ module.exports = {
 				}
 				return quickReply;
 		});
-		if(stopReplies.length==0) {
+		if(stopReplies.length === 0) {
 			var messageData = {
 				recipient: {
 					id: senderID
 				},
 				message: {
 					text: "Sorry, there are no stops within 1 km. Are you in Waterloo Region, Canada?",
-					quick_replies: [
+					quick_replies: [ 
 								{
 									content_type: "location",
 								},
@@ -75,8 +75,8 @@ module.exports = {
 						quick_replies: stopReplies
 					}
 				};
-				console.log(messageData);
-				callSendAPI(messageData);
+			console.log(messageData);
+			callSendAPI(messageData);
 		}
 	},
 
@@ -104,7 +104,7 @@ module.exports = {
 						console.log("Got a response: ");
 						var buses = nathaniel.data;
 						if (buses === undefined) {
-							reject("Could not get real-time info for this stop - buses may not be running");
+							reject("Could not get real-time info for this stop - buses may not be running.");
 						}
 						else {
 							var answer = "";
@@ -151,7 +151,9 @@ module.exports = {
 										answer += `${fromSeconds(seconds)} \n`;
 									}
 								}
-								if(!timeExists) reject("No real-time arrivals for this stop");
+								if(!timeExists) {
+									reject("No real-time arrivals for this stop.");
+								}
 							}
 							resolve(answer);
 						}
