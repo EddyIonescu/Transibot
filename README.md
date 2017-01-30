@@ -1,6 +1,12 @@
-# Messenger Platform Sample
 
-This is a sample project showcasing the Messenger Platform. You can go through the [walk-through](https://developers.facebook.com/docs/messenger-platform/quickstart) to understand this code in more detail. The [Complete Guide](https://developers.facebook.com/docs/messenger-platform/implementation) goes deeper into the features available.
+How it works:
 
-Visit the [dev site](https://developers.facebook.com/docs/messenger-platform/) to find out more details about the Messenger Platform.
+1. User sends their location in FB Messenger.
+2. Transibot asks them to choose which stop they want.
+3. Transibot shows the times of the next few buses for the routes serving that stop.
+
+You can try it out here:
+<a href="https://m.me/Transibot">m.me/Transibot</a>
+
+
 
