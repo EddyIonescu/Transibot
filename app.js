@@ -258,8 +258,23 @@ function receivedMessage(event) {
         transitime.getWhichStop(senderID, callSendAPI, 
            stops, closestStopsKeys, message.attachments[0].payload.coordinates.lat, 
            message.attachments[0].payload.coordinates.long);
+        return;
 	   }
   }
+  var messageData = {
+						recipient: {
+							id: senderID
+						},
+						message: {
+							text: "Sorry, I only understand locations.",
+							quick_replies: [
+								{
+									content_type: "location",
+								},
+							]
+						}
+					};
+		callSendAPI(messageData);
 }
 
 

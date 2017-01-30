@@ -4,9 +4,6 @@
 // Input: Stop coordinates
 // Output: arrival times for next buses for all routes serving that stop
 
-// Obtain GTFS Info using Node-GTFS, which puts it into a MongoDB database
-
-
 module.exports = {
 	
 	getClosestStops: function (lat, long, grt_stops) {
@@ -29,33 +26,40 @@ module.exports = {
 		// show within 1km - then take top 8 if too many
 		// if 2+ stops have the same names, include their IDs
 		var stopReplies = [];
+		var stopNames = new Map();
+		var nameMin = 16;
 		locs.forEach(function(loc) {
 			var distance = geolib.getDistance(stops[loc.key], {lat: lat, long: long});
-			var stopNames = new Map();
 			if(distance < 1000) {
-				stopNames.set(stops[loc.key].name, "GRT" + stops[loc.key].id);
+				stopNames.set(stops[loc.key].name.substring(0, nameMin+1), "GRT" + stops[loc.key].id);
 				var quickReply = {content_type: "text", title: stops[loc.key].name, payload: "GRT" + stops[loc.key].id};
-				console.log(quickReply);
+				
 				stopReplies.push(quickReply);
 			}
-			stopReplies.map(function(quickReply) {
-				if(stopNames.get(quickReply.title) != quickReply.payload) {
-					stopNames.set(quickReply.title, quickReply.payload);
-					return {content_type: quickReply.content_type, 
-							title: quickReply.id.substring(3) + quickReply.title,
-							payload: quickReply.id};
-				}
-				return quickReply;
-			});
 		});
 		while(stopReplies.length > 5) stopReplies.pop();
+		stopReplies = stopReplies.map(function(quickReply) {
+				console.log(quickReply);
+				if(stopNames.get(quickReply.title.substring(0, nameMin+1)) !== quickReply.payload) {
+					stopNames.set(quickReply.title.substring(0, nameMin+1), quickReply.payload);
+					return {content_type: quickReply.content_type, 
+							title: quickReply.payload.substring(3) + " " + quickReply.title,
+							payload: quickReply.payload};
+				}
+				return quickReply;
+		});
 		if(stopReplies.length==0) {
 			var messageData = {
 				recipient: {
-					id: senderId
+					id: senderID
 				},
 				message: {
-					text: "Sorry, there are no stops within 1 km",
+					text: "Sorry, there are no stops within 1 km.",
+					quick_replies: [
+								{
+									content_type: "location",
+								},
+							],
 					metadata: "NO_STOPS"
 				}
   			};
