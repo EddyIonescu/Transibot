@@ -8,9 +8,9 @@
 
 
 module.exports = {
-
+	
 	getClosestStops: function (lat, long, grt_stops) {
-		var geolib = require('geolib')
+		var geolib = require('geolib');
 		// Idea: GTFS is standardized, so it'll work across other transit systems, like the TTC, etc.
 		// parseGTFS();
 
@@ -24,32 +24,67 @@ module.exports = {
 	},
 
 	// sorted stops -> stop ID
-	getWhichStop: function(senderID, callSendAPI, stops, keys) {
-		var messageData = {
+	getWhichStop: function(senderID, callSendAPI, stops, locs, lat, long) {
+		var geolib = require('geolib');
+		// show within 1km - then take top 8 if too many
+		// if 2+ stops have the same names, include their IDs
+		var stopReplies = [];
+		locs.forEach(function(loc) {
+			var distance = geolib.getDistance(stops[loc.key], {lat: lat, long: long});
+			var stopNames = new Map();
+			if(distance < 1000) {
+				stopNames.set(stops[loc.key].name, "GRT" + stops[loc.key].id);
+				var quickReply = {content_type: "text", title: stops[loc.key].name, payload: "GRT" + stops[loc.key].id};
+				console.log(quickReply);
+				stopReplies.push(quickReply);
+			}
+			stopReplies.map(function(quickReply) {
+				if(stopNames.get(quickReply.title) != quickReply.payload) {
+					stopNames.set(quickReply.title, quickReply.payload);
+					return {content_type: quickReply.content_type, 
+							title: quickReply.id.substring(3) + quickReply.title,
+							payload: quickReply.id};
+				}
+				return quickReply;
+			});
+		});
+		while(stopReplies.length > 5) stopReplies.pop();
+		if(stopReplies.length==0) {
+			var messageData = {
 				recipient: {
-					id: senderID
+					id: senderId
 				},
 				message: {
-					text: "Which stop?",
-					quick_replies: [
-						{
-							content_type: "text",
-							title: "Red",
-        					payload: "DEVELOPER_DEFINED_PAYLOAD_FOR_PICKING_RED"
-						},
-					]
+					text: "Sorry, there are no stops within 1 km",
+					metadata: "NO_STOPS"
 				}
-			};
-			console.log(messageData);
-			callSendAPI(messageData);
+  			};
+  			callSendAPI(messageData);
+		}
+		else {
+			var messageData = {
+					recipient: {
+						id: senderID
+					},
+					message: {
+						text: "Which stop?",
+						quick_replies: stopReplies
+					}
+				};
+				console.log(messageData);
+				callSendAPI(messageData);
+		}
 	},
 
-	getNextBuses: function (stop, senderID, sendTextMessage, callSendAPI) {
+	getNextBuses: function (stopid, senderID, sendTextMessage, callSendAPI) {
 
 		return new Promise(
 			function (resolve, reject) {
 				var http = require('http');
-				var stopid = stop.id;
+
+				if(stopid.substring(0, 3) == "GRT") stopid = stopid.substring(3);
+				else reject("Did not select a GRT stop");
+
 				var url = "http://nwoodthorpe.com/grt/V2/livetime.php?stop=" + stopid;
 
 				http.get(url, function (res) {
@@ -65,7 +100,7 @@ module.exports = {
 						console.log("Got a response: ");
 						var buses = nathaniel.data;
 						if (buses === undefined) {
-							reject("GRT is down or buses aren't running");
+							reject("Could not get real-time info for this stop - buses may not be running");
 						}
 						else {
 							var answer = "";
@@ -73,14 +108,16 @@ module.exports = {
 								console.log(buses[i].name);
 								answer += buses[i].name + " - ";
 								var arrivals = buses[i].stopDetails;
+								var timeExists = false;
 								for (var j = 0; j < arrivals.length; j++) {
 									var arrival = arrivals[j];
 									if (arrival.hasRealTime) {
+										timeExists = true;
 
 										const fromMinutes = function (minutes) {
 											var modulo = minutes % 60;
 											return String.prototype.concat(
-												format((minutes - modulo) / 60),
+												format(((minutes - modulo) / 60)%24),
 												":",
 												format(modulo)
 											);
@@ -110,6 +147,7 @@ module.exports = {
 										answer += `${fromSeconds(seconds)} \n`;
 									}
 								}
+								if(!timeExists) reject("No real-time arrivals for this stop");
 							}
 							resolve(answer);
 						}
@@ -122,35 +160,42 @@ module.exports = {
 				function (answer) {
 					console.log("Success");
 					console.log(answer);
-					sendTextMessage(senderID, `Next Buses: ${answer}`);
-
-					// longer message above takes longer to send; want to ensure this message is the last one
-					setTimeout(requestLocation, 2000);
-					function requestLocation() {
-						// so that the user can get updated times, re-request location
-						var messageData = {
-							recipient: {
-								id: senderID
-							},
-							message: {
-								text: "Where are you?",
-								quick_replies: [
-									{
-										content_type: "location",
-									},
-								]
-							}
-						};
-						console.log(messageData);
-						callSendAPI(messageData);
-					}
+					//sendTextMessage(senderID, `Next Buses: ${answer}`);
+					var messageData = {
+						recipient: {
+							id: senderID
+						},
+						message: {
+							text: `Next Buses:\n${answer}`,
+							quick_replies: [
+								{
+									content_type: "location",
+								},
+							]
+						}
+					};
+					callSendAPI(messageData);
 					return answer;
 				}
 			).catch(
 				function (errorMessage) {
 					console.log("Error");
 					console.log(errorMessage);
-					sendTextMessage(senderID, errorMessage);
+					//sendTextMessage(senderID, errorMessage);
+					var messageData = {
+						recipient: {
+							id: senderID
+						},
+						message: {
+							text: errorMessage,
+							quick_replies: [
+								{
+									content_type: "location",
+								},
+							]
+						}
+					};
+					callSendAPI(messageData);
 					return errorMessage;
 				}
 			);

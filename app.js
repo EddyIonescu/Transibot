@@ -1,13 +1,5 @@
-/*
- * Copyright 2016-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE file in the root directory of this source tree.
- *
- */
+// Built off the Facebook Messenger Chatbot Sample 
 
-/* jshint node: true, devel: true */
 'use strict';
 
 const 
@@ -244,99 +236,97 @@ function receivedMessage(event) {
     console.log("Received echo for message %s and app %d with metadata %s", 
       messageId, appId, metadata);
     return;
-  } else if (quickReply) {
+  }
+  
+  if (quickReply) {
     var quickReplyPayload = quickReply.payload;
-    console.log("Quick reply for message %s with payload %s",
-      messageId, quickReplyPayload);
+    console.log("Quick reply for message %s with payload %s", messageId, quickReplyPayload);
 
-    sendTextMessage(senderID, "Quick reply tapped");
+    transitime.getNextBuses(quickReplyPayload, senderID, sendTextMessage, callSendAPI);
     return;
   }
 
-  if (messageText) {
-
-    // If we receive a text message, check to see if it matches any special
-    // keywords and send back the corresponding example. Otherwise, just echo
-    // the text we received.
-    switch (messageText) {
-      case 'image':
-        //sendImageMessage(senderID);
-        break;
-
-      case 'gif':
-        //sendGifMessage(senderID);
-        break;
-
-      case 'audio':
-        //sendAudioMessage(senderID);
-        break;
-
-      case 'video':
-        //sendVideoMessage(senderID);
-        break;
-
-      case 'file':
-        //sendFileMessage(senderID);
-        break;
-
-      case 'button':
-        //sendButtonMessage(senderID);
-        break;
-
-      case 'generic':
-        //sendGenericMessage(senderID);
-        break;
-
-      case 'receipt':
-        //sendReceiptMessage(senderID);
-        break;
-
-      case 'quick reply':
-        //sendQuickReply(senderID);
-        break;        
-
-      case 'read receipt':
-        sendReadReceipt(senderID);
-        break;        
-
-      case 'typing on':
-        sendTypingOn(senderID);
-        break;        
-
-      case 'typing off':
-        sendTypingOff(senderID);
-        break;        
-
-      case 'account linking':
-        sendAccountLinking(senderID);
-        break;
-
-      default:
-        sendTextMessage(senderID, messageText);
-    }
-  } else if (messageAttachments) {
+  if (messageAttachments) {
+    // User sent their location - ask which stop is closest
 	   if(message.attachments[0].type == 'location') {
-		    //sendTextMessage(senderID, message.attachments[0].payload.coordinates.lat);
-
-        //sendTextMessage(senderID, message.attachments[0].payload.coordinates.long);
 
         var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
             message.attachments[0].payload.coordinates.long, grt_stops);
         var stops = stopsTuple[0];
         var closestStopsKeys = stopsTuple[1];
 
-        transitime.getWhichStop(senderID, callSendAPI, stops, closestStopsKeys);
-
-        var stop1 = stops[closestStopsKeys[0].key];
-        sendTextMessage(senderID, `Closest Stop: ${stop1.name} (${stop1.id})`);
-
-        // also sends the texts
-        var nextBus = transitime.getNextBuses(stops[closestStops[0].key], senderID, sendTextMessage, callSendAPI);
-        console.log(nextBus);
+        transitime.getWhichStop(senderID, callSendAPI, 
+           stops, closestStopsKeys, message.attachments[0].payload.coordinates.lat, 
+           message.attachments[0].payload.coordinates.long);
 	   }
   }
 }
 
+
+// keep the conversation going...
+// so that the user can get updated times, re-request location
+function sendLocationRequest(senderID) {
+    var messageData = {
+      recipient: {
+        id: senderID
+      },
+      message: {
+        text: "Where are you?",
+        quick_replies: [
+          {
+            content_type: "location",
+          },
+        ]
+      }
+    };
+    console.log(messageData);
+    // location request now sent directly in transitime::getNextBuses after response
+    //callSendAPI(messageData);
+}
+
+// initiate conversation for the very first time
+// Note: obsolete as greeting message is predefined text on the facebook page
+function welcomeUser(senderID) {
+  const m1 = "I'm Transibot, and I know exactly when your bus will arrive!";
+  const m2 = "I'm only familiar with GRT in Waterloo Region, but I'm learning about other places too.";
+  function welcomeAnonyUser() {
+    sendTextMessage(senderID, m1);
+    sendTextMessage(senderID, m2);
+  }
+  new Promise(
+			function (resolve, reject) {
+        http.get("https://graph.facebook.com/v2.6/"
+        + senderID + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token="
+        + PAGE_ACCESS_TOKEN, function (res) {
+					var body = '';
+
+					res.on('data', function (chunk) {
+						body += chunk;
+					});
+
+					res.on('end', function () {
+            var user = JSON.parse(body);
+            if(user===undefined) {
+              reject();
+            }
+            else {
+              resolve(user);
+            }
+          });
+        }
+  ).on('error', function (e) {
+					console.log("Got an error: ", e);
+					reject("GRT could not be reached");
+				})
+			}).then( function(user) {
+        name = user.first_name;
+          sendTextMessage(senderID, "Hi " + name);
+          welcomeAnonyUser();
+      }).catch(function () {
+          console.log("couldn't get user's info");
+          welcomeAnonyUser();
+      });
+}
 
 /*
  * Delivery Confirmation Event
@@ -366,8 +356,9 @@ function receivedDeliveryConfirmation(event) {
 // Referral Event (recent - when user opens existing thread)
 function receivedReferral(event) {
   console.log("recieved referral");
+  var senderID = event.sender.id;
   var recipientID = event.recipient.id;
-  sendLocationRequest(receiptID);
+  welcomeUser(senderID);
 }
 
 // When new user initiates conversation, ask for their location
@@ -392,7 +383,7 @@ function receivedPostback(event) {
 
   // When a postback is called, we'll send a message back to the sender to 
   // let them know it was successful
-  sendLocationRequest(receiptID);
+  sendLocationRequest(senderID);
   //sendTextMessage(senderID, "Postback called");
 }
 
@@ -410,6 +401,8 @@ function receivedMessageRead(event) {
   // All messages before watermark (a timestamp) or sequence have been seen.
   var watermark = event.read.watermark;
   var sequenceNumber = event.read.seq;
+
+  sendLocationRequest(senderID);
 
   console.log("Received message read event for watermark %d and sequence " +
     "number %d", watermark, sequenceNumber);
@@ -456,93 +449,6 @@ function sendImageMessage(recipientId) {
   callSendAPI(messageData);
 }
 
-/*
- * Send a Gif using the Send API.
- *
- */
-function sendGifMessage(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      attachment: {
-        type: "image",
-        payload: {
-          url: SERVER_URL + "/assets/instagram_logo.gif"
-        }
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
-
-/*
- * Send audio using the Send API.
- *
- */
-function sendAudioMessage(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      attachment: {
-        type: "audio",
-        payload: {
-          url: SERVER_URL + "/assets/sample.mp3"
-        }
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
-
-/*
- * Send a video using the Send API.
- *
- */
-function sendVideoMessage(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      attachment: {
-        type: "video",
-        payload: {
-          url: SERVER_URL + "/assets/allofus480.mov"
-        }
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
-
-/*
- * Send a file using the Send API.
- *
- */
-function sendFileMessage(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      attachment: {
-        type: "file",
-        payload: {
-          url: SERVER_URL + "/assets/test.txt"
-        }
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
 
 /*
  * Send a text message using the Send API.
@@ -645,106 +551,6 @@ function sendGenericMessage(recipientId) {
       }
     }
   };  
-
-  callSendAPI(messageData);
-}
-
-/*
- * Send a receipt message using the Send API.
- *
- */
-function sendReceiptMessage(recipientId) {
-  // Generate a random receipt ID as the API requires a unique ID
-  var receiptId = "order" + Math.floor(Math.random()*1000);
-
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message:{
-      attachment: {
-        type: "template",
-        payload: {
-          template_type: "receipt",
-          recipient_name: "Peter Chang",
-          order_number: receiptId,
-          currency: "USD",
-          payment_method: "Visa 1234",        
-          timestamp: "1428444852", 
-          elements: [{
-            title: "Oculus Rift",
-            subtitle: "Includes: headset, sensor, remote",
-            quantity: 1,
-            price: 599.00,
-            currency: "USD",
-            image_url: SERVER_URL + "/assets/riftsq.png"
-          }, {
-            title: "Samsung Gear VR",
-            subtitle: "Frost White",
-            quantity: 1,
-            price: 99.99,
-            currency: "USD",
-            image_url: SERVER_URL + "/assets/gearvrsq.png"
-          }],
-          address: {
-            street_1: "1 Hacker Way",
-            street_2: "",
-            city: "Menlo Park",
-            postal_code: "94025",
-            state: "CA",
-            country: "US"
-          },
-          summary: {
-            subtotal: 698.99,
-            shipping_cost: 20.00,
-            total_tax: 57.67,
-            total_cost: 626.66
-          },
-          adjustments: [{
-            name: "New Customer Discount",
-            amount: -50
-          }, {
-            name: "$100 Off Coupon",
-            amount: -100
-          }]
-        }
-      }
-    }
-  };
-
-  callSendAPI(messageData);
-}
-
-/*
- * Send a message with Quick Reply buttons.
- *
- */
-function sendQuickReply(recipientId) {
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      text: "What's your favorite movie genre?",
-      quick_replies: [
-        {
-          "content_type":"text",
-          "title":"Action",
-          "payload":"DEVELOPER_DEFINED_PAYLOAD_FOR_PICKING_ACTION"
-        },
-        {
-          "content_type":"text",
-          "title":"Comedy",
-          "payload":"DEVELOPER_DEFINED_PAYLOAD_FOR_PICKING_COMEDY"
-        },
-        {
-          "content_type":"text",
-          "title":"Drama",
-          "payload":"DEVELOPER_DEFINED_PAYLOAD_FOR_PICKING_DRAMA"
-        }
-      ]
-    }
-  };
 
   callSendAPI(messageData);
 }
