@@ -107,26 +107,26 @@ module.exports = {
 							reject("Could not get real-time info for this stop - buses may not be running.");
 						}
 						else {
-							var answer = "";
-							for (var i = 0; i < buses.length; i++) {
-								console.log(buses[i].name);
-								answer += buses[i].name + " - ";
-								var arrivals = buses[i].stopDetails;
-								var timeExists = false;
-								for (var j = 0; j < arrivals.length; j++) {
-									var arrival = arrivals[j];
+							var answer = buses.reduce(function(acc, bus) {
+								var answer = bus.name + " - \n";
+								var arrivals = [bus]; // bus.stopDetails; 
+								// GRT changed their API!
+								// Now bus.stopDetails only contains scheduled departures
+								// and the only real-time departure is now within the bus field.
+								// Fourtunatly, the property names are consistent, so we put the bus into a list
+								// as to "patch" the code while making minimal changes.
+								var hasRealTime = arrivals.reduce(function(acc, arrival) {
 									if (arrival.hasRealTime) {
-										timeExists = true;
-
+										console.log("REAL TIME");
+										// convert from seconds of day to hh:mm:ss in 24-hour time
 										const fromMinutes = function (minutes) {
 											var modulo = minutes % 60;
 											return String.prototype.concat(
-												format(((minutes - modulo) / 60)%24),
+												format(((minutes - modulo) / 60) % 24),
 												":",
 												format(modulo)
 											);
 										};
-
 										const fromSeconds = function (seconds) {
 										var modulo = seconds % 60;
 											return String.prototype.concat(
@@ -135,26 +135,26 @@ module.exports = {
 												format(modulo)
 											);
 										};
-
-										const format = function (int) {
-											var n = String(int);
-											if (int === 0) {
+										const format = function (num) {
+											var n = String(num);
+											if (num === 0) {
 												n = '00';
-											} 
-											else if (int < 10) {
-												n = String.prototype.concat(0, int);
+											}
+											else if (num < 10) {
+												n = String.prototype.concat(0, num);
 											}
 											return n;
 										};
-
 										const seconds = arrival.departure;
 										answer += `${fromSeconds(seconds)} \n`;
+										return true;
 									}
-								}
-								if(!timeExists) {
-									reject("No real-time arrivals for this stop.");
-								}
-							}
+									return acc;
+								}, false);
+								if(hasRealTime) return acc + answer;
+								return acc;
+							}, "");
+							if(answer==="") reject("Sorry, couldn't find any real-time arrivals for this stop.");
 							resolve(answer);
 						}
 					});
