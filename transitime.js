@@ -4,6 +4,10 @@
 // Input: Stop coordinates
 // Output: arrival times for next buses for all routes serving that stop
 
+function debug(message) {
+	console.log(message);
+}
+
 module.exports = {
 	
 	getClosestStops: function (lat, long, grt_stops) {
@@ -39,7 +43,7 @@ module.exports = {
 		});
 		while(stopReplies.length > 5) stopReplies.pop();
 		stopReplies = stopReplies.map(function(quickReply) {
-				console.log(quickReply);
+				debug(quickReply);
 				if(stopNames.get(quickReply.title.substring(0, nameMin+1)) !== quickReply.payload) {
 					stopNames.set(quickReply.title.substring(0, nameMin+1), quickReply.payload);
 					return {content_type: quickReply.content_type, 
@@ -75,7 +79,7 @@ module.exports = {
 						quick_replies: stopReplies
 					}
 				};
-			console.log(messageData);
+			debug(messageData);
 			callSendAPI(messageData);
 		}
 	},
@@ -101,92 +105,130 @@ module.exports = {
 					res.on('end', function () {
 						var nathaniel = JSON.parse(body);
 
-						console.log("Got a response: ");
+						debug("Made contact to GRT API: ");
 						var buses = nathaniel.data;
 						if (buses === undefined) {
 							reject("Could not get real-time info for this stop - buses may not be running.");
 						}
 						else {
-							var answer = buses.reduce(function(acc, bus) {
-								var answer = bus.name + " - \n";
+							var answers = buses.reduce((answers_acc, bus) => {
+								var answer = bus.name + "\n";
 								var arrivals = [bus]; // bus.stopDetails; 
 								// GRT changed their API!
 								// Now bus.stopDetails only contains scheduled departures
 								// and the only real-time departure is now within the bus field.
 								// Fourtunatly, the property names are consistent, so we put the bus into a list
 								// as to "patch" the code while making minimal changes.
-								var hasRealTime = arrivals.reduce(function(acc, arrival) {
+								var hasRealTime = arrivals.reduce((acc, arrival) => {
 									if (arrival.hasRealTime) {
-										console.log("REAL TIME");
 										// convert from seconds of day to hh:mm:ss in 24-hour time
 										const fromMinutes = function (minutes) {
 											var modulo = minutes % 60;
 											return String.prototype.concat(
-												format(((minutes - modulo) / 60) % 24),
-												":",
-												format(modulo)
+												format(((minutes - modulo) / 60) % 24), ":", format(modulo)
 											);
 										};
 										const fromSeconds = function (seconds) {
 										var modulo = seconds % 60;
 											return String.prototype.concat(
-												fromMinutes((seconds - modulo) / 60),
-												":",
-												format(modulo)
+												fromMinutes((seconds - modulo) / 60), ":", format(modulo)
 											);
 										};
 										const format = function (num) {
 											var n = String(num);
-											if (num === 0) {
-												n = '00';
-											}
-											else if (num < 10) {
-												n = String.prototype.concat(0, num);
-											}
+											if (num === 0) n = '00';
+											else if (num < 10) n = String.prototype.concat(0, num);
 											return n;
 										};
 										const seconds = arrival.departure;
-										answer += `${fromSeconds(seconds)} \n`;
+										answer += `${fromSeconds(seconds)}\n`;
 										return true;
 									}
 									return acc;
 								}, false);
-								if(hasRealTime) return acc + answer;
-								return acc;
-							}, "");
-							if(answer==="") reject("Sorry, couldn't find any real-time arrivals for this stop.");
-							resolve(answer);
+								if(hasRealTime) {
+									answers_acc.push(answer);
+									return answers_acc;
+								}
+								return answers_acc;
+							}, []);
+							if(answers.length == 0) reject("Sorry, couldn't find any real-time arrivals for this stop.");
+							resolve(answers);
 						}
 					});
 				}).on('error', function (e) {
-					console.log("Got an error: ", e);
+					debug("Got an error: ", e);
 					reject("GRT could not be reached");
 				})
 			}).then(
-				function (answer) {
-					console.log("Success");
-					console.log(answer);
-					//sendTextMessage(senderID, `Next Buses: ${answer}`);
-					var messageData = {
-						recipient: {
-							id: senderID
-						},
-						message: {
-							text: `Next Buses:\n${answer}`,
-							quick_replies: [
-								{
-									content_type: "location",
-								},
-							]
+				function (answers) {
+					debug("Success");
+					debug(answers);
+					var delay = 700;
+					//sendTypingOn();
+					var nextMsg = "Next Buses:";
+					if(answers.length == 1) nextMsg = "Next Bus:";
+					sendTextMessage(senderID, nextMsg);
+					
+					setTimeout(sendTextMessageDelay, delay);
+					// Goal: send buses with delays so that it can animate nicely on Messenger
+
+					function sendTextMessageDelay () {
+						//sendTypingOn();
+						if(answers.length==1) {
+							sendLastTime();
+							return;
 						}
-					};
-					callSendAPI(messageData);
-					return answer;
+						sendTextMessage(senderID, answers[0]);
+						answers = answers.slice(1);
+						setTimeout(sendTextMessageDelay, delay);
+					}
+
+					function sendLastTime() {
+						//sendTypingOff()
+						var messageData = {
+							recipient: {
+								id: senderID
+							},
+							message: {
+								text: answers[0], 
+								// text is required so we'll put the last time in instead of "where are you?"
+								quick_replies: [
+									{
+										content_type: "location",
+									},
+								]
+							}
+						};
+						callSendAPI(messageData);
+					}
+
+					function sendTypingOn() {
+						var messageData = {
+							recipient: {
+								id: senderID
+							},
+							sender_action: "typing_on"
+						};
+						callSendAPI(messageData);
+					}
+
+					function sendTypingOff() {
+						var messageData = {
+							recipient: {
+								id: senderID
+							},
+							sender_action: "typing_off"
+						};
+						callSendAPI(messageData);
+					}
+
+					return answers;
 				}
 			).catch(
 				function (errorMessage) {
-					console.log("Error");
-					console.log(errorMessage);
+					debug("Error");
+					debug(errorMessage);
 					//sendTextMessage(senderID, errorMessage);
 					var messageData = {
 						recipient: {
@@ -205,5 +247,7 @@ module.exports = {
 					return errorMessage;
 				}
 			);
-	}
+	},
+
+	
 };
