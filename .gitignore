@@ -1,0 +1,13 @@
+*.csr
+*.key
+*.crt
+/config/default.json
+/config/*
+.DS_Store
+*.zip
+grt_stops.js
+stops.txt
+*.docx
+*.json
+node_modules
+
