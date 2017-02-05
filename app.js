@@ -51,7 +51,7 @@ if (!(APP_SECRET && VALIDATION_TOKEN && PAGE_ACCESS_TOKEN && SERVER_URL)) {
 }
 
 function debug(message) {
-  //console.log(message);
+  console.log(message);
 }
 
 /*

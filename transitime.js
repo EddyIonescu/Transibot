@@ -5,7 +5,7 @@
 // Output: arrival times for next buses for all routes serving that stop
 
 function debug(message) {
-	//console.log(message);
+	console.log(message);
 }
 
 module.exports = {
