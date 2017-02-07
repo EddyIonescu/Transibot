@@ -32,6 +32,8 @@ module.exports = {
 		var stopReplies = [];
 		var stopNames = new Map();
 		var nameMin = 16;
+		var stopLimit = 8;
+
 		locs.forEach(function(loc) {
 			var distance = geolib.getDistance(stops[loc.key], {lat: lat, long: long});
 			if(distance < 1000) {
@@ -41,7 +43,7 @@ module.exports = {
 				stopReplies.push(quickReply);
 			}
 		});
-		while(stopReplies.length > 5) stopReplies.pop();
+		stopReplies = stopReplies.slice(0, stopLimit);
 		stopReplies = stopReplies.map(function(quickReply) {
 				debug(quickReply);
 				if(stopNames.get(quickReply.title.substring(0, nameMin+1)) !== quickReply.payload) {
