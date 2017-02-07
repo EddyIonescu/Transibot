@@ -27,31 +27,45 @@ module.exports = {
 	// sorted stops -> stop ID
 	getWhichStop: function(senderID, callSendAPI, stops, locs, lat, long) {
 		var geolib = require('geolib');
-		// show within 1km - then take top 8 if too many
-		// if 2+ stops have the same names, include their IDs
+
+		// show within 1km - then take top stopLimit if too many
+		var radius = 1000;
+		var stopLimit = 8;
+
+		// if 2+ stops have the same names, merge them (so multiple IDs for a stop), meaning that payload is a list
+		// then show buses arriving at that stop from first to last
 		var stopReplies = [];
-		var stopNames = new Map();
+		var stopNames = new Map(); // stopName -> stopIDs
+
+		// when looking for duplicate names, only consider the first nameMin characters
 		var nameMin = 16;
-		locs.forEach(function(loc) {
+
+		locs.forEach((loc) => {
 			var distance = geolib.getDistance(stops[loc.key], {lat: lat, long: long});
-			if(distance < 1000) {
-				stopNames.set(stops[loc.key].name.substring(0, nameMin+1), "GRT" + stops[loc.key].id);
-				var quickReply = {content_type: "text", title: stops[loc.key].name, payload: "GRT" + stops[loc.key].id};
-				
+			if(distance < radius) {
+				const payload = ["GRT" + stops[loc.key].id];
+				stopNames.set(stops[loc.key].name.substring(0, nameMin), payload);
+				var quickReply = {content_type: "text", title: stops[loc.key].name, payload: payload};
 				stopReplies.push(quickReply);
 			}
 		});
-		while(stopReplies.length > 5) stopReplies.pop();
-		stopReplies = stopReplies.map(function(quickReply) {
-				debug(quickReply);
-				if(stopNames.get(quickReply.title.substring(0, nameMin+1)) !== quickReply.payload) {
-					stopNames.set(quickReply.title.substring(0, nameMin+1), quickReply.payload);
-					return {content_type: quickReply.content_type, 
-							title: quickReply.payload.substring(3) + " " + quickReply.title,
-							payload: quickReply.payload};
-				}
-				return quickReply;
+
+		// elements with duplicate names get removed (except for the original), and stopNames map is initialized
+		stopReplies = stopReplies.filter((quickReply) => {
+			debug(quickReply);
+			if(!stopNames.get(quickReply.title.substring(0, nameMin)).includes(quickReply.payload[0])) {
+				stopNames.set(quickReply.title.substring(0, nameMin), 
+					stopNames.get(quickReply.title.substring(0, nameMin)).concat(quickReply.payload));
+				return false
+			}
+			return true
+		}).map((quickReply) => {
+			quickReply.payload = stopNames.get(quickReply.title.substring(0, nameMin)).join("*");
+			return quickReply;
 		});
+		
+		stopReplies = stopReplies.slice(0, stopLimit);
+
 		if(stopReplies.length === 0) {
 			var messageData = {
 				recipient: {
@@ -165,7 +179,6 @@ module.exports = {
 					debug("Success");
 					debug(answers);
 					var delay = 700;
-					//sendTypingOn();
 					var nextMsg = "Next Buses:";
 					if(answers.length == 1) nextMsg = "Next Bus:";
 					sendTextMessage(senderID, nextMsg);
@@ -174,7 +187,6 @@ module.exports = {
 					// Goal: send buses with delays so that it can animate nicely on Messenger
 
 					function sendTextMessageDelay () {
-						//sendTypingOn();
 						if(answers.length==1) {
 							sendLastTime();
 							return;
@@ -185,7 +197,6 @@ module.exports = {
 					}
 
 					function sendLastTime() {
-						//sendTypingOff()
 						var messageData = {
 							recipient: {
 								id: senderID
@@ -199,26 +210,6 @@ module.exports = {
 									},
 								]
 							}
-						};
-						callSendAPI(messageData);
-					}
-
-					function sendTypingOn() {
-						var messageData = {
-							recipient: {
-								id: senderID
-							},
-							sender_action: "typing_on"
-						};
-						callSendAPI(messageData);
-					}
-
-					function sendTypingOff() {
-						var messageData = {
-							recipient: {
-								id: senderID
-							},
-							sender_action: "typing_off"
 						};
 						callSendAPI(messageData);
 					}

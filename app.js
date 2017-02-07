@@ -4,7 +4,7 @@
 
 const 
   bodyParser = require('body-parser'),
-  config = require('./config/prodConfig.json'),
+  config = require('./config/devConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
@@ -221,8 +221,7 @@ function receivedMessage(event) {
   var timeOfMessage = event.timestamp;
   var message = event.message;
 
-  debug("Received message for user %d and page %d at %d with message:", 
-    senderID, recipientID, timeOfMessage);
+  debug("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
   debug(JSON.stringify(message));
 
   var isEcho = message.is_echo;
@@ -237,16 +236,15 @@ function receivedMessage(event) {
 
   if (isEcho) {
     // Just logging message echoes to console
-    debug("Received echo for message %s and app %d with metadata %s", 
-      messageId, appId, metadata);
+    debug("Received echo for message %s and app %d with metadata %s", messageId, appId, metadata);
     return;
   }
   
   if (quickReply) {
-    var quickReplyPayload = quickReply.payload;
-    debug("Quick reply for message %s with payload %s", messageId, quickReplyPayload);
-
-    transitime.getNextBuses(quickReplyPayload, senderID, sendTextMessage, callSendAPI);
+    debug("Quick reply for message %s with payload %s", messageId, quickReply.payload);
+      quickReply.payload.split("*").forEach((stopID) => {
+        transitime.getNextBuses(stopID, senderID, sendTextMessage, callSendAPI);
+      });
     return;
   }
 
@@ -265,6 +263,7 @@ function receivedMessage(event) {
         return;
 	   }
   }
+
   var messageData = {
 						recipient: {
 							id: senderID
