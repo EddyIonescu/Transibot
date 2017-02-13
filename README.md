@@ -9,4 +9,6 @@ You can try it out here:
 <a href="https://m.me/Transibot">m.me/Transibot</a>
 
 
+Architecture:
 
+Messenger, Facebook, etc. <=> Transibot Node.JS app <= MongoDB <= GTFSupdate Go app
