@@ -8,82 +8,118 @@ function debug(message) {
 	console.log(message);
 }
 
-module.exports = {
+// sorted stops -> stop ID
+function getWhichStop (senderID, callSendAPI, stops, lat, long) {
+	// show within 1km - then take top 8 if too many
+	// if 2+ stops have the same names, include their IDs
+	var stopButtons = [];
+	var stopNames = new Map();
+	var nameMin = 16;
+	var stopLimit = 10;
 	
-	getClosestStops: function (lat, long, grt_stops) {
-		var geolib = require('geolib');
-		// Idea: GTFS is standardized, so it'll work across other transit systems, like the TTC, etc.
-		// parseGTFS();
+	stops.forEach(function(stop) {
+		stopNames.set(stop.name.substring(0, nameMin+1), stop._id);
+		if(stop.agency.name === "waterloo-grt") {
+			stop.localid = "GRT" + stop.localid;
+		}
+		stopButtons.push(
+			{
+				title: stop.name,
+				buttons: [
+							{
+								type: "postback", title: stop.localid, payload: stop.localid
+							}
+							]
+			});
+	});
 
-		// Stops hardcoded for GRT; TODO: use GTFS file from their website
-		var stops = grt_stops.getStops();
+	stopButtons = stopButtons.slice(0, stopLimit);
+	debug(stopButtons);
 
-		stops = stops.stops;
-
-		return [stops, geolib.orderByDistance({ lat: lat, long: long }, stops)]; // key is index in stops
-
-	},
-
-	// sorted stops -> stop ID
-	getWhichStop: function(senderID, callSendAPI, stops, locs, lat, long) {
-		var geolib = require('geolib');
-		// show within 1km - then take top 8 if too many
-		// if 2+ stops have the same names, include their IDs
-		var stopReplies = [];
-		var stopNames = new Map();
-		var nameMin = 16;
-		var stopLimit = 8;
-
-		locs.forEach(function(loc) {
-			var distance = geolib.getDistance(stops[loc.key], {lat: lat, long: long});
-			if(distance < 1000) {
-				stopNames.set(stops[loc.key].name.substring(0, nameMin+1), "GRT" + stops[loc.key].id);
-				var quickReply = {content_type: "text", title: stops[loc.key].name, payload: "GRT" + stops[loc.key].id};
-				
-				stopReplies.push(quickReply);
+	if(stopButtons.length === 0) {
+		var messageData = {
+			recipient: {
+				id: senderID
+			},
+			message: {
+				text: "Sorry, there are no stops within 2 km. Are you in Waterloo Region, Canada?",
+				quick_replies: [ 
+							{
+								content_type: "location",
+							},
+						],
+				metadata: "NO_STOPS"
 			}
-		});
-		stopReplies = stopReplies.slice(0, stopLimit);
-		stopReplies = stopReplies.map(function(quickReply) {
-				debug(quickReply);
-				if(stopNames.get(quickReply.title.substring(0, nameMin+1)) !== quickReply.payload) {
-					stopNames.set(quickReply.title.substring(0, nameMin+1), quickReply.payload);
-					return {content_type: quickReply.content_type, 
-							title: quickReply.payload.substring(3) + " " + quickReply.title,
-							payload: quickReply.payload};
-				}
-				return quickReply;
-		});
-		if(stopReplies.length === 0) {
-			var messageData = {
+		};
+		callSendAPI(messageData);
+	}
+	else {
+		var messageData = {
 				recipient: {
 					id: senderID
 				},
 				message: {
-					text: "Sorry, there are no stops within 1 km. Are you in Waterloo Region, Canada?",
-					quick_replies: [ 
-								{
-									content_type: "location",
-								},
-							],
-					metadata: "NO_STOPS"
-				}
-  			};
-  			callSendAPI(messageData);
-		}
-		else {
-			var messageData = {
-					recipient: {
-						id: senderID
-					},
-					message: {
-						text: "Which stop?",
-						quick_replies: stopReplies
+					attachment: {
+						type: "template",
+						payload: {
+							template_type: "generic",
+							elements: stopButtons
+						}
 					}
-				};
-			debug(messageData);
-			callSendAPI(messageData);
-		}
+				}
+			};
+		debug(messageData);
+		callSendAPI(messageData);
+	}
+}
+
+module.exports = {
+
+	getClosestStops: function (lat, long, senderID, callSendAPI) {
+		//var geolib = require('geolib');
+
+		// todo: use mongoose and define schema
+		//var mongoose = require('mongoose');
+
+		var MongoClient = require("mongodb")
+		var fs = require('fs');
+		var pass = fs.readFileSync('.mongopass', 'utf8');
+		MongoClient.connect("mongodb://eddy:" + pass.slice(0,-1) + "@172.31.25.113:27017/transistops", function(err, db) {
+		if(err) { return console.dir(err); }
+
+			var collection = db.collection('stops');
+			collection.ensureIndex({ location: "2dsphere" })
+			collection.find(
+			{
+				location:
+				{ $near :
+					{
+						$geometry: { type: "Point",  coordinates: [ long, lat ] },
+						$minDistance: 0,
+						$maxDistance: 2000
+					}
+				}
+			}
+			).toArray(function(err, db_stops) {
+				debug("error:");
+				debug(err);
+				debug("mongostops:");
+				//debug(db_stops);
+				getWhichStop(senderID, callSendAPI, db_stops, lat, long);
+			});
+
+		});
+
+		// Idea: GTFS is standardized, so it'll work across other transit systems, like the TTC, etc.
+		// parseGTFS();
+
+		// Stops hardcoded for GRT; TODO: use GTFS file from their website
+		//var stops = grt_stops.getStops();
+
+		//stops = stops.stops;
+
+		//return [stops, geolib.orderByDistance({ lat: lat, long: long }, stops)]; // key is index in stops
+
 	},
 
 	getNextBuses: function (stopid, senderID, sendTextMessage, callSendAPI) {
