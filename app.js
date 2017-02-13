@@ -4,7 +4,7 @@
 
 const 
   bodyParser = require('body-parser'),
-  config = require('./config/prodConfig.json'),
+  config = require('./config/devConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
@@ -241,27 +241,14 @@ function receivedMessage(event) {
       messageId, appId, metadata);
     return;
   }
-  
-  if (quickReply) {
-    var quickReplyPayload = quickReply.payload;
-    debug("Quick reply for message %s with payload %s", messageId, quickReplyPayload);
-
-    transitime.getNextBuses(quickReplyPayload, senderID, sendTextMessage, callSendAPI);
-    return;
-  }
 
   if (messageAttachments) {
     // User sent their location - ask which stop is closest
 	   if(message.attachments[0].type == 'location') {
 
-        var stopsTuple = transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
-            message.attachments[0].payload.coordinates.long, grt_stops);
-        var stops = stopsTuple[0];
-        var closestStopsKeys = stopsTuple[1];
-
-        transitime.getWhichStop(senderID, callSendAPI, 
-           stops, closestStopsKeys, message.attachments[0].payload.coordinates.lat, 
-           message.attachments[0].payload.coordinates.long);
+        transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
+            message.attachments[0].payload.coordinates.long, senderID, callSendAPI);
+            // response handled by recieved postback event
         return;
 	   }
   }
@@ -397,12 +384,15 @@ function receivedPostback(event) {
   // button for Structured Messages. 
   var payload = event.postback.payload;
 
-  debug("Received postback for user %d and page %d with payload '%s' " + 
+  debug("Received postback for user %d and page %d with payload %s " + 
     "at %d", senderID, recipientID, payload, timeOfPostback);
+
+
+  transitime.getNextBuses(payload, senderID, sendTextMessage, callSendAPI);
 
   // When a postback is called, we'll send a message back to the sender to 
   // let them know it was successful
-  sendLocationRequest(senderID);
+  // sendLocationRequest(senderID);
   //sendTextMessage(senderID, "Postback called");
 }
 
