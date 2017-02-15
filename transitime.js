@@ -239,7 +239,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 				})
 			}).on('error', function (e) {
 				debug("Got an error: ", e);
-				reject("NextBus could not be reached");
+				reject("Sorry, NextBus could not be reached.");
 			})
 		}).then((answers) => {
 			continuation(answers);
@@ -296,7 +296,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 }
 
 // get next buses for Waterloo/GRT buses - requires specific API
-// todo: use an API that's more recent and consistently maintained
+// TODO: use an API that's more recent and consistently maintained
 function getWaterlooBus(stopid, senderID, callSendAPI) {
 	new Promise((resolve, reject) => {
 		var http = require('http');
@@ -304,14 +304,11 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 
 		http.get(url, function (res) {
 			var body = '';
-
 			res.on('data', function (chunk) {
 				body += chunk;
 			});
-
 			res.on('end', function () {
 				var nathaniel = JSON.parse(body);
-
 				debug("Made contact to GRT API: ");
 				var buses = nathaniel.data;
 				if (buses === undefined) {
@@ -330,6 +327,7 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 						var hasRealTime = arrivals.reduce((acc, arrival) => {
 							if (arrival.hasRealTime) {
 								// convert from seconds of day to hh:mm:ss in 24-hour time
+								// TODO show time remaining until bus departs instead
 								const fromMinutes = function (minutes) {
 									var modulo = minutes % 60;
 									return String.prototype.concat(
@@ -366,7 +364,7 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 			});
 		}).on('error', function (e) {
 			debug("Got an error: ", e);
-			reject("GRT could not be reached");
+			reject("Sorry, GRT could not be reached");
 		})
 	}).then(
 		function (answers) {
