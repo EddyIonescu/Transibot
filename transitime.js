@@ -206,7 +206,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 		 
 		 The TTC (Toronto) StopIDs are internal and are useless for nextbus - it's the Stop-Tag that must be used
 	
-		 This function all routes for nextbus are needed as to make queries for the TTC using the stop-tag and route-# 
+		 All routes for nextbus are needed as to make queries for the TTC using the stop-tag and route-# 
 		 This means that for the TTC, 200 requests for one stop would be made 
 		 (as when buses suddenly get rerouted, they serve stops they don't normally serve (and nextbus adapts to this))
 	
