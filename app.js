@@ -1,10 +1,22 @@
-// Built off the Facebook Messenger Chatbot Sample 
+/*
+
+  App.js - handles communication with Messenger and is a modified version of the Facebook Messenger Chatbot Sample
+  Transitime.js - gets stop/bus information and responds to user using functions defined here that are passed on
+
+  Idea: 
+  When adding support for future platforms (WeChat, Slack, Skype, Kik, etc.),
+  app.js will be rewritten for that platform while transitime.js will stay the same.
+
+  TODO: transitime currently constructs responses based on Messenger's definitions - 
+        - make a generalized construct and then convert to the required platform
+
+*/
 
 'use strict';
 
 const 
   bodyParser = require('body-parser'),
-  config = require('./config/devConfig.json'),
+  config = require('./config/prodConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
