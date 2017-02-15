@@ -14,12 +14,12 @@
 
 'use strict';
 
-const 
+const
   bodyParser = require('body-parser'),
   config = require('./config/prodConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
-  https = require('https'),  
+  https = require('https'),
   request = require('request'),
   grt_stops = require('./grt_stops.js'),
   transitime = require('./transitime.js');
@@ -37,7 +37,7 @@ app.use(express.static('public'));
  */
 
 // App Secret can be retrieved from the App Dashboard
-const APP_SECRET = (process.env.MESSENGER_APP_SECRET) ? 
+const APP_SECRET = (process.env.MESSENGER_APP_SECRET) ?
   process.env.MESSENGER_APP_SECRET :
   config.appSecret;
 
@@ -71,15 +71,15 @@ function debug(message) {
  * setup is the same token used here.
  *
  */
-app.get('/webhook', function(req, res) {
+app.get('/webhook', function (req, res) {
   if (req.query['hub.mode'] === 'subscribe' &&
-      req.query['hub.verify_token'] === VALIDATION_TOKEN) {
+    req.query['hub.verify_token'] === VALIDATION_TOKEN) {
     debug("Validating webhook");
     res.status(200).send(req.query['hub.challenge']);
   } else {
     console.error("Failed validation. Make sure the validation tokens match.");
-    res.sendStatus(403);          
-  }  
+    res.sendStatus(403);
+  }
 });
 
 
@@ -92,17 +92,17 @@ app.get('/webhook', function(req, res) {
  */
 app.post('/webhook', function (req, res) {
   var data = req.body;
- debug("webhook called");
+  debug("webhook called");
   // Make sure this is a page subscription
   if (data.object == 'page') {
     // Iterate over each entry
     // There may be multiple if batched
-    data.entry.forEach(function(pageEntry) {
+    data.entry.forEach(function (pageEntry) {
       var pageID = pageEntry.id;
       var timeOfEvent = pageEntry.time;
 
       // Iterate over each messaging event
-      pageEntry.messaging.forEach(function(messagingEvent) {
+      pageEntry.messaging.forEach(function (messagingEvent) {
         if (messagingEvent.optin) {
           receivedAuthentication(messagingEvent);
         } else if (messagingEvent.message) {
@@ -111,7 +111,7 @@ app.post('/webhook', function (req, res) {
           receivedDeliveryConfirmation(messagingEvent);
         } else if (messagingEvent.postback) {
           receivedPostback(messagingEvent);
-        } else if(messagingEvent.referral) {
+        } else if (messagingEvent.referral) {
           receivedReferral(messagingEvent);
         } else if (messagingEvent.read) {
           receivedMessageRead(messagingEvent);
@@ -136,7 +136,7 @@ app.post('/webhook', function (req, res) {
  * (sendAccountLinking) is pointed to this URL. 
  * 
  */
-app.get('/authorize', function(req, res) {
+app.get('/authorize', function (req, res) {
   var accountLinkingToken = req.query.account_linking_token;
   var redirectURI = req.query.redirect_uri;
 
@@ -175,8 +175,8 @@ function verifyRequestSignature(req, res, buf) {
     var signatureHash = elements[1];
 
     var expectedHash = crypto.createHmac('sha1', APP_SECRET)
-                        .update(buf)
-                        .digest('hex');
+      .update(buf)
+      .digest('hex');
 
     if (signatureHash != expectedHash) {
       throw new Error("Couldn't validate the request signature.");
@@ -205,7 +205,7 @@ function receivedAuthentication(event) {
   var passThroughParam = event.optin.ref;
 
   debug("Received authentication for user %d and page %d with pass " +
-    "through param '%s' at %d", senderID, recipientID, passThroughParam, 
+    "through param '%s' at %d", senderID, recipientID, passThroughParam,
     timeOfAuth);
 
   // When an authentication is received, we'll send a message back to the sender
@@ -233,7 +233,7 @@ function receivedMessage(event) {
   var timeOfMessage = event.timestamp;
   var message = event.message;
 
-  debug("Received message for user %d and page %d at %d with message:", 
+  debug("Received message for user %d and page %d at %d with message:",
     senderID, recipientID, timeOfMessage);
   debug(JSON.stringify(message));
 
@@ -249,82 +249,82 @@ function receivedMessage(event) {
 
   if (isEcho) {
     // Just logging message echoes to console
-    debug("Received echo for message %s and app %d with metadata %s", 
+    debug("Received echo for message %s and app %d with metadata %s",
       messageId, appId, metadata);
     return;
   }
 
   if (messageAttachments) {
     // User sent their location - ask which stop is closest
-	   if(message.attachments[0].type == 'location') {
+    if (message.attachments[0].type == 'location') {
 
-        transitime.getClosestStops(message.attachments[0].payload.coordinates.lat, 
-            message.attachments[0].payload.coordinates.long, senderID, callSendAPI);
-            // response handled by recieved postback event
-        return;
-	   }
+      transitime.getClosestStops(message.attachments[0].payload.coordinates.lat,
+        message.attachments[0].payload.coordinates.long, senderID, callSendAPI);
+      // response handled by recieved postback event
+      return;
+    }
   }
   var messageData = {
-						recipient: {
-							id: senderID
-						},
-						message: {
-							text: "Sorry, I only understand locations.",
-							quick_replies: [
-								{
-									content_type: "location",
-								},
-							]
-						}
-					};
-		callSendAPI(messageData);
+    recipient: {
+      id: senderID
+    },
+    message: {
+      text: "Sorry, I only understand locations.",
+      quick_replies: [
+        {
+          content_type: "location",
+        },
+      ]
+    }
+  };
+  callSendAPI(messageData);
 }
 
 
 // keep the conversation going...
 // so that the user can get updated times, re-request location
 function sendLocationRequest(senderID) {
-    var messageData = {
-      recipient: {
-        id: senderID
-      },
-      message: {
-        text: "Where are you?",
-        quick_replies: [
-          {
-            content_type: "location",
-          },
-        ]
-      }
-    };
-    debug(messageData);
-    // location request now sent directly in transitime::getNextBuses after response
-    //callSendAPI(messageData);
+  var messageData = {
+    recipient: {
+      id: senderID
+    },
+    message: {
+      text: "Where are you?",
+      quick_replies: [
+        {
+          content_type: "location",
+        },
+      ]
+    }
+  };
+  debug(messageData);
+  // location request now sent directly in transitime::getNextBuses after response
+  //callSendAPI(messageData);
 }
 
 // initiate conversation for the very first time
 // Note: obsolete as greeting message is predefined text on the facebook page
 function welcomeUser(senderID) {
   const m1 = "I'm Transibot, and I know exactly when your bus will arrive!";
-  const m2 = "I'm only familiar with GRT in Waterloo Region, but I'm learning about other places too.";
+  const m2 = "I'm familiar with GRT in Waterloo Region and Muni in SF, but I'm learning about other places too.";
   function welcomeAnonyUser() {
     sendTextMessage(senderID, m1);
     sendTextMessage(senderID, m2);
   }
   new Promise(
-			function (resolve, reject) {
-        http.get("https://graph.facebook.com/v2.6/"
+    function (resolve, reject) {
+      http.get("https://graph.facebook.com/v2.6/"
         + senderID + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token="
         + PAGE_ACCESS_TOKEN, function (res) {
-					var body = '';
+          var body = '';
 
-					res.on('data', function (chunk) {
-						body += chunk;
-					});
+          res.on('data', function (chunk) {
+            body += chunk;
+          });
 
-					res.on('end', function () {
+          res.on('end', function () {
             var user = JSON.parse(body);
-            if(user===undefined) {
+            if (user === undefined) {
               reject();
             }
             else {
@@ -332,18 +332,18 @@ function welcomeUser(senderID) {
             }
           });
         }
-  ).on('error', function (e) {
-					debug("Got an error: ", e);
-					reject("GRT could not be reached");
-				})
-			}).then( function(user) {
-        name = user.first_name;
-          sendTextMessage(senderID, "Hi " + name);
-          welcomeAnonyUser();
-      }).catch(function () {
-          debug("couldn't get user's info");
-          welcomeAnonyUser();
-      });
+      ).on('error', function (e) {
+        debug("Got an error: ", e);
+        reject("GRT could not be reached");
+      })
+    }).then(function (user) {
+      name = user.first_name;
+      sendTextMessage(senderID, "Hi " + name);
+      welcomeAnonyUser();
+    }).catch(function () {
+      debug("couldn't get user's info");
+      welcomeAnonyUser();
+    });
 }
 
 /*
@@ -362,8 +362,8 @@ function receivedDeliveryConfirmation(event) {
   var sequenceNumber = delivery.seq;
 
   if (messageIDs) {
-    messageIDs.forEach(function(messageID) {
-      debug("Received delivery confirmation for message ID: %s", 
+    messageIDs.forEach(function (messageID) {
+      debug("Received delivery confirmation for message ID: %s",
         messageID);
     });
   }
@@ -396,7 +396,7 @@ function receivedPostback(event) {
   // button for Structured Messages. 
   var payload = event.postback.payload;
 
-  debug("Received postback for user %d and page %d with payload %s " + 
+  debug("Received postback for user %d and page %d with payload %s " +
     "at %d", senderID, recipientID, payload, timeOfPostback);
 
 
@@ -504,7 +504,7 @@ function sendButtonMessage(recipientId) {
         payload: {
           template_type: "button",
           text: "This is test text",
-          buttons:[{
+          buttons: [{
             type: "web_url",
             url: "https://www.oculus.com/en-us/rift/",
             title: "Open Web URL"
@@ -520,7 +520,7 @@ function sendButtonMessage(recipientId) {
         }
       }
     }
-  };  
+  };
 
   callSendAPI(messageData);
 }
@@ -542,7 +542,7 @@ function sendGenericMessage(recipientId) {
           elements: [{
             title: "rift",
             subtitle: "Next-generation virtual reality",
-            item_url: "https://www.oculus.com/en-us/rift/",               
+            item_url: "https://www.oculus.com/en-us/rift/",
             image_url: SERVER_URL + "/assets/rift.png",
             buttons: [{
               type: "web_url",
@@ -556,7 +556,7 @@ function sendGenericMessage(recipientId) {
           }, {
             title: "touch",
             subtitle: "Your Hands, Now in VR",
-            item_url: "https://www.oculus.com/en-us/touch/",               
+            item_url: "https://www.oculus.com/en-us/touch/",
             image_url: SERVER_URL + "/assets/touch.png",
             buttons: [{
               type: "web_url",
@@ -571,7 +571,7 @@ function sendGenericMessage(recipientId) {
         }
       }
     }
-  };  
+  };
 
   callSendAPI(messageData);
 }
@@ -609,14 +609,14 @@ function sendAccountLinking(recipientId) {
         payload: {
           template_type: "button",
           text: "Welcome. Link your account.",
-          buttons:[{
+          buttons: [{
             type: "account_link",
             url: SERVER_URL + "/authorize"
           }]
         }
       }
     }
-  };  
+  };
 
   callSendAPI(messageData);
 }
@@ -639,22 +639,22 @@ function callSendAPI(messageData) {
       var messageId = body.message_id;
 
       if (messageId) {
-        debug("Successfully sent message with id %s to recipient %s", 
+        debug("Successfully sent message with id %s to recipient %s",
           messageId, recipientId);
       } else {
-      debug("Successfully called Send API for recipient %s", 
-        recipientId);
+        debug("Successfully called Send API for recipient %s",
+          recipientId);
       }
     } else {
       console.error("Failed calling Send API", response.statusCode, response.statusMessage, body.error);
     }
-  });  
+  });
 }
 
 // Start server
 // Webhooks must be available via SSL with a certificate signed by a valid 
 // certificate authority.
-app.listen(app.get('port'), function() {
+app.listen(app.get('port'), function () {
   debug('Node app is running on port', app.get('port'));
 });
 
