@@ -35,7 +35,7 @@ module.exports = {
 				debug(err);
 				stops.forEach((stop => {
 					debug(stop);
-					if(stop.agency.name === "sf-muni") {
+					if (stop.agency.name === "sf-muni") {
 						// append 1 to front of stop-id. 
 						// Why? I have no idea.
 						// TODO: get around to asking them (Muni and Nextbus) to ensure it won't suddenly change
@@ -46,7 +46,7 @@ module.exports = {
 						// Waterloo has its own API
 						getWaterlooBus(stop.localid, senderID, callSendAPI);
 					}
-					else if(stop.agency.realtime.nextbusagencyid !== "") {
+					else if (stop.agency.realtime.nextbusagencyid !== "") {
 						// all other nextbus transit agencies - though Toronto will have to be handled differently
 						useNextbus(stop, senderID, callSendAPI);
 					}
@@ -201,24 +201,24 @@ function sendNextBuses(answers, senderID, callSendAPI) {
 // get next buses for any agency that uses the NextBus API
 function useNextbus(stop, senderID, callSendAPI) {
 
-/*
-	 To get a prediction, I supply either a StopID or a Stop-Tag and a Route-#
-	 
-	 The TTC (Toronto) StopIDs are internal and are useless for nextbus - it's the Stop-Tag that must be used
-
-	 This function all routes for nextbus are needed as to make queries for the TTC using the stop-tag and route-# 
-	 This means that for the TTC, 200 requests for one stop would be made 
-	 (as when buses suddenly get rerouted, they serve stops they don't normally serve (and nextbus adapts to this))
-
-	 Muni (San Francisco) doesn't have this issue as the StopIDs are consistent with the Stop-Tags
-
-	 TODO: nicely ask nextbus to let me get all buses of any route for a certain stop
-*/
+	/*
+		 To get a prediction, I supply either a StopID or a Stop-Tag and a Route-#
+		 
+		 The TTC (Toronto) StopIDs are internal and are useless for nextbus - it's the Stop-Tag that must be used
+	
+		 This function all routes for nextbus are needed as to make queries for the TTC using the stop-tag and route-# 
+		 This means that for the TTC, 200 requests for one stop would be made 
+		 (as when buses suddenly get rerouted, they serve stops they don't normally serve (and nextbus adapts to this))
+	
+		 Muni (San Francisco) doesn't have this issue as the StopIDs are consistent with the Stop-Tags
+	
+		 TODO: nicely ask nextbus to let me get all buses of any route for a certain stop
+	*/
 	function getAllRoutes(continuation) {
 		new Promise((resolve, reject) => {
 			var http = require('http');
 			var url = "http://restbus.info/api/agencies/" + stop.agency.realtime.nextbusagencyid + "/routes";
-			
+
 			debug(url);
 			var answers = [];
 			http.get(url, function (res) {
@@ -229,13 +229,15 @@ function useNextbus(stop, senderID, callSendAPI) {
 				res.on('end', function () {
 					var data = JSON.parse(body);
 					debug(data);
-					if (data === undefined || !Array.isArray(data) || (typeof(data.reduce) === undefined)) {
+					if (data === undefined || !Array.isArray(data) || typeof (data.reduce) === undefined) {
 						reject("Could not get routes for specified stop - might not be on nextbus");
 					}
-					data.forEach((route) => {
-						answers.push(route.id);
-					});
-					resolve(answers);
+					else {
+						data.forEach((route) => {
+							answers.push(route.id);
+						});
+						resolve(answers);
+					}
 				})
 			}).on('error', function (e) {
 				debug("Got an error: ", e);
@@ -252,7 +254,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 		new Promise((resolve, reject) => {
 			var http = require('http');
 			var url = "http://restbus.info/api/agencies/" + stop.agency.realtime.nextbusagencyid + "/stops/" + stop.localid + "/predictions";
-			
+
 			debug(url);
 
 			http.get(url, function (res) {
@@ -263,25 +265,27 @@ function useNextbus(stop, senderID, callSendAPI) {
 				res.on('end', function () {
 					var data = JSON.parse(body);
 					debug(data);
-					if (data === undefined || !Array.isArray(data) || (typeof(data.reduce) === undefined)) {
+					if (data === undefined || !Array.isArray(data) || (typeof (data.reduce) === undefined)) {
 						reject("Could not get real-time info for this stop - buses may not be running.", senderID, callSendAPI);
 					}
-					var answers = data.reduce((answers_acc, bus) => {
-						var answer = bus.route.title + "\n";
-						var arrivals = bus.values;
-						arrivals.forEach((arrival) => {
-							if (arrival.seconds > 59 && arrival.seconds < 120)
-								answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
-							else if (arrival.seconds < 60)
-								answer += arrival.seconds + " seconds.\n";
-							else
-								answer += Math.floor(arrival.seconds / 60) + " minutes, " + (arrival.seconds % 60) + " seconds.\n";
-						});
-						answers_acc.push(answer);
-						return answers_acc;
-					}, []);
-					if (answers.length == 0) reject("Sorry, couldn't find any real-time arrivals for this stop.");
-					resolve(answers);
+					else {
+						var answers = data.reduce((answers_acc, bus) => {
+							var answer = bus.route.title + "\n";
+							var arrivals = bus.values;
+							arrivals.forEach((arrival) => {
+								if (arrival.seconds > 59 && arrival.seconds < 120)
+									answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
+								else if (arrival.seconds < 60)
+									answer += arrival.seconds + " seconds.\n";
+								else
+									answer += Math.floor(arrival.seconds / 60) + " minutes, " + (arrival.seconds % 60) + " seconds.\n";
+							});
+							answers_acc.push(answer);
+							return answers_acc;
+						}, []);
+						if (answers.length == 0) reject("Sorry, couldn't find any real-time arrivals for this stop.");
+						resolve(answers);
+					}
 				})
 			}).on('error', function (e) {
 				debug("Got an error: ", e);
