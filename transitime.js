@@ -229,8 +229,8 @@ function useNextbus(stop, senderID, callSendAPI) {
 				res.on('end', function () {
 					var data = JSON.parse(body);
 					debug(data);
-					if (data === undefined || !Array.isArray(data)) {
-						reject("Could not get routes - is nextbus up?");
+					if (data === undefined || !Array.isArray(data) || (typeof(data.reduce) === undefined)) {
+						reject("Could not get routes for specified stop - might not be on nextbus");
 					}
 					data.forEach((route) => {
 						answers.push(route.id);
@@ -263,7 +263,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 				res.on('end', function () {
 					var data = JSON.parse(body);
 					debug(data);
-					if (data === undefined || !Array.isArray(data)) {
+					if (data === undefined || !Array.isArray(data) || (typeof(data.reduce) === undefined)) {
 						reject("Could not get real-time info for this stop - buses may not be running.", senderID, callSendAPI);
 					}
 					var answers = data.reduce((answers_acc, bus) => {
