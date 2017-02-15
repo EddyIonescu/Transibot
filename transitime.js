@@ -1,13 +1,69 @@
 'use strict';
 
-// Real-Time Retrieval
-// Input: Stop coordinates
-// Output: arrival times for next buses for all routes serving that stop
+module.exports = {
+
+	// User sends us their location
+	getClosestStops: function (lat, long, senderID, callSendAPI) {
+		// TODO: use mongoose and define a "schema"
+		// or better yet, use PostgreSQL with PostGIS (more todo: learn SQL)
+		// var mongoose = require('mongoose');
+
+		getTransistopsCollection((collection) => {
+			collection.ensureIndex({ location: "2dsphere" })
+			collection.find({
+				location: {
+					$near: {
+						$geometry: { type: "Point", coordinates: [long, lat] },
+						$minDistance: 0,
+						$maxDistance: 2000
+					}
+				}
+			}
+			).toArray((err, db_stops) => {
+				// sends user list of stops to choose from
+				getWhichStop(senderID, callSendAPI, db_stops, lat, long);
+			});
+		});
+	},
+
+	// User selects a stop
+	getNextBuses: function (stopid, senderID, sendTextMessage, callSendAPI) {
+		getTransistopsCollection((collection) => {
+			collection.find({
+				_id: stopid
+			}).toArray((err, stops) => {
+				debug(err);
+				stops.forEach((stop => {
+					debug(stop);
+					if(stop.agency.name === "sf-muni") {
+						// append 1 to front of stop-id. 
+						// Why? I have no idea.
+						// TODO: get around to asking them (Muni and Nextbus) to ensure it won't suddenly change
+						stop.localid = "1" + stop.localid;
+						useNextbus(stop, senderID, callSendAPI);
+					}
+					else if (stop.agency.name === "waterloo-grt") {
+						// Waterloo has its own API
+						getWaterlooBus(stop.localid, senderID, callSendAPI);
+					}
+					else if(stop.agency.realtime.nextbusagencyid !== "") {
+						// all other nextbus transit agencies - though Toronto will have to be handled differently
+						useNextbus(stop, senderID, callSendAPI);
+					}
+					else {
+						debug("Could not get next bus for " + stop.agency.name + "; " + stop._id);
+					}
+				}));
+			});
+		});
+	},
+};
+
+// Helper Functions:
 
 function debug(message) {
 	console.log(message);
 }
-
 
 // ask user which stop of those in stops they want
 // once user selects one, the recievedPostback function in app.js is invoked
@@ -17,15 +73,12 @@ function getWhichStop(senderID, callSendAPI, stops, lat, long) {
 	var stopLimit = 10;
 
 	stops.forEach(function (stop) {
-		if (stop.agency.name === "waterloo-grt") {
-			stop.localid = "GRT" + stop.localid;
-		}
 		stopButtons.push(
 			{
 				title: stop.name,
 				buttons: [
 					{
-						type: "postback", title: stop.localid, payload: stop.localid
+						type: "postback", title: stop.localid, payload: stop._id
 					}
 				]
 			});
@@ -40,7 +93,7 @@ function getWhichStop(senderID, callSendAPI, stops, lat, long) {
 				id: senderID
 			},
 			message: {
-				text: "Sorry, there are no stops within 2 km. Are you in Waterloo Region, Canada?",
+				text: "Sorry, there are no stops within 2 km. Are you in Waterloo, Toronto, or San Francisco?",
 				quick_replies: [
 					{
 						content_type: "location",
@@ -71,7 +124,7 @@ function getWhichStop(senderID, callSendAPI, stops, lat, long) {
 	}
 }
 
-// and let's hope it's a friendly error message (like "Sorry, I couldn't connect to NextBus")
+// and let's hope it's a friendly error message (like "Sorry, I couldn't connect to Waterloo GRT.")
 function sendErrorToUser(errorMessage, senderID, callSendAPI) {
 	debug("Error");
 	debug(errorMessage);
@@ -112,6 +165,18 @@ function sendNextBuses(answers, senderID, callSendAPI) {
 		setTimeout(sendTextMessageDelay, delay);
 	}
 
+	function sendTextMessage(recipientId, messageText) {
+		var messageData = {
+			recipient: {
+				id: recipientId
+			},
+			message: {
+				text: messageText
+			}
+		};
+		callSendAPI(messageData);
+	}
+
 	function sendLastTime() {
 		var messageData = {
 			recipient: {
@@ -131,56 +196,110 @@ function sendNextBuses(answers, senderID, callSendAPI) {
 	}
 }
 
+
+
 // get next buses for any agency that uses the NextBus API
 function useNextbus(stop, senderID, callSendAPI) {
-	new Promise((resolve, reject) => {
-		var http = require('http');
 
-		var url = "http://restbus.info/api/agencies/" + stop.agency.realtime.nextbusagencyid + "/stops/" + stop.localid + "/predictions";
+/*
+	 To get a prediction, I supply either a StopID or a Stop-Tag and a Route-#
+	 
+	 The TTC (Toronto) StopIDs are internal and are useless for nextbus - it's the Stop-Tag that must be used
 
-		http.get(url, function (res) {
-			var body = '';
-			res.on('data', function (chunk) {
-				body += chunk;
-			});
-			res.on('end', function () {
-				var answers = body.reduce((answers_acc, bus) => {
-					var answer = bus.route.title + "\n";
-					var arrivals = bus.values;
-					arrivals.forEach((arrival) => {
-						if (arrival.seconds > 59 && arrival.seconds < 120)
-							answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
-						else if (arrival.seconds < 60)
-							answer += arrival.seconds + " seconds.\n";
-						else
-							answer += (arrival.seconds / 60) + " minutes, " + (arrival.seconds % 60) + " seconds.\n";
-						answers_acc.push(answer);
+	 This function all routes for nextbus are needed as to make queries for the TTC using the stop-tag and route-# 
+	 This means that for the TTC, 200 requests for one stop would be made 
+	 (as when buses suddenly get rerouted, they serve stops they don't normally serve (and nextbus adapts to this))
+
+	 Muni (San Francisco) doesn't have this issue as the StopIDs are consistent with the Stop-Tags
+
+	 TODO: nicely ask nextbus to let me get all buses of any route for a certain stop
+*/
+	function getAllRoutes(continuation) {
+		new Promise((resolve, reject) => {
+			var http = require('http');
+			var url = "http://restbus.info/api/agencies/" + stop.agency.realtime.nextbusagencyid + "/routes";
+			
+			debug(url);
+			var answers = [];
+			http.get(url, function (res) {
+				var body = '';
+				res.on('data', function (chunk) {
+					body += chunk;
+				});
+				res.on('end', function () {
+					var data = JSON.parse(body);
+					debug(data);
+					if (data === undefined || !Array.isArray(data)) {
+						reject("Could not get routes - is nextbus up?");
+					}
+					data.forEach((route) => {
+						answers.push(route.id);
 					});
-					return answers_acc;
-				}, []);
-				if (answers.length == 0) reject("Sorry, couldn't find any real-time arrivals for this stop.");
-				resolve(answers);
+					resolve(answers);
+				})
+			}).on('error', function (e) {
+				debug("Got an error: ", e);
+				reject("NextBus could not be reached");
 			})
-		}).on('error', function (e) {
-			debug("Got an error: ", e);
-			reject("NextBus could not be reached");
-		})
-	}).then((answers) => {
-		sendNextBuses(answers, senderID, callSendAPI);
-	}).catch((errorMessage) => {
-		sendErrorToUser(errorMessage, senderID, callSendAPI);
+		}).then((answers) => {
+			continuation(answers);
+		}).catch((errorMessage) => {
+			sendErrorToUser(errorMessage, senderID, callSendAPI);
+		});
+	}
+
+	getAllRoutes((routes) => {
+		new Promise((resolve, reject) => {
+			var http = require('http');
+			var url = "http://restbus.info/api/agencies/" + stop.agency.realtime.nextbusagencyid + "/stops/" + stop.localid + "/predictions";
+			
+			debug(url);
+
+			http.get(url, function (res) {
+				var body = '';
+				res.on('data', function (chunk) {
+					body += chunk;
+				});
+				res.on('end', function () {
+					var data = JSON.parse(body);
+					debug(data);
+					if (data === undefined || !Array.isArray(data)) {
+						reject("Could not get real-time info for this stop - buses may not be running.", senderID, callSendAPI);
+					}
+					var answers = data.reduce((answers_acc, bus) => {
+						var answer = bus.route.title + "\n";
+						var arrivals = bus.values;
+						arrivals.forEach((arrival) => {
+							if (arrival.seconds > 59 && arrival.seconds < 120)
+								answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
+							else if (arrival.seconds < 60)
+								answer += arrival.seconds + " seconds.\n";
+							else
+								answer += Math.floor(arrival.seconds / 60) + " minutes, " + (arrival.seconds % 60) + " seconds.\n";
+						});
+						answers_acc.push(answer);
+						return answers_acc;
+					}, []);
+					if (answers.length == 0) reject("Sorry, couldn't find any real-time arrivals for this stop.");
+					resolve(answers);
+				})
+			}).on('error', function (e) {
+				debug("Got an error: ", e);
+				reject("NextBus could not be reached");
+			})
+		}).then((answers) => {
+			sendNextBuses(answers, senderID, callSendAPI);
+		}).catch((errorMessage) => {
+			sendErrorToUser(errorMessage, senderID, callSendAPI);
+		});
 	});
 }
 
 // get next buses for Waterloo/GRT buses - requires specific API
 // todo: use an API that's more recent and consistently maintained
-function getWaterlooBus(stop, senderID, callSendAPI) {
+function getWaterlooBus(stopid, senderID, callSendAPI) {
 	new Promise((resolve, reject) => {
 		var http = require('http');
-
-		if (stopid.substring(0, 3) == "GRT") stopid = stopid.substring(3);
-		else reject("Did not select a GRT stop");
-
 		var url = "http://nwoodthorpe.com/grt/V2/livetime.php?stop=" + stopid;
 
 		http.get(url, function (res) {
@@ -255,7 +374,7 @@ function getWaterlooBus(stop, senderID, callSendAPI) {
 		}
 		).catch(
 		function (errorMessage) {
-			sendErrorToUser(errorMessage);
+			sendErrorToUser(errorMessage, senderID, callSendAPI);
 		}
 		);
 }
@@ -266,57 +385,9 @@ function getTransistopsCollection(continuation) {
 	var fs = require('fs');
 	var pass = fs.readFileSync('.mongopass', 'utf8');
 	MongoClient.connect("mongodb://eddy:" + pass.slice(0, -1) + "@172.31.25.113:27017/transistops", function (err, db) {
-		if (err) debug(err); 
+		if (err) debug(err);
 		continuation(db.collection('stops'));
 	});
 }
 
-module.exports = {
 
-	getClosestStops: function (lat, long, senderID, callSendAPI) {
-		// todo: use mongoose and define a "schema"
-		// or better yet, use PostgreSQL with PostGIS (more todo: learn SQL)
-		// var mongoose = require('mongoose');
-
-		getTransistopsCollection((collection) => {
-			collection.ensureIndex({ location: "2dsphere" })
-			collection.find({
-					location: {
-						$near: {
-							$geometry: { type: "Point", coordinates: [long, lat] },
-							$minDistance: 0,
-							$maxDistance: 2000
-						}
-					}
-				}
-			).toArray((err, db_stops) => {
-				debug("error:");
-				debug(err);
-				debug("mongostops:");
-				//debug(db_stops);
-				getWhichStop(senderID, callSendAPI, db_stops, lat, long);
-			});
-		});
-	},
-
-	getNextBuses: function (stopid, senderID, sendTextMessage, callSendAPI) {
-		getTransistopsCollection((collection) => {
-			collection.find({
-				_id: stopid
-			}).toArray((err, stops) => {
-				debug(err);
-				stops.forEach((stop => {
-					if(stop.agency.realtime.nextbusagencyid !== "") {
-						useNextbus(stop, senderID, callSendAPI);
-					}
-					else if(stop.agency.name === "waterloo-grt") {
-						getWaterlooBus(stop.localid, senderID, callSendAPI);
-					}
-					else {
-						debug("Could not get next bus for " + stop.agency.name + "; " + stop._id);
-					}
-				}));
-			});
-		});
-	},
-};
