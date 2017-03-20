@@ -22,6 +22,8 @@ module.exports = {
 			).toArray((err, db_stops) => {
 				// sends user list of stops to choose from
 				getWhichStop(senderID, callSendAPI, db_stops, lat, long);
+
+				// TODO here add code to skip to closest stop if it's s clear winner (only one <3m away)
 			});
 		});
 	},
@@ -44,7 +46,7 @@ module.exports = {
 					}
 					else if (stop.agency.name === "waterloo-grt") {
 						// Waterloo has its own API
-						getWaterlooBus(stop.localid, senderID, callSendAPI);
+						getWaterlooBus(stop, senderID, callSendAPI);
 					}
 					else if (stop.agency.realtime.nextbusagencyid !== "") {
 						// all other nextbus transit agencies - though Toronto will have to be handled differently
@@ -274,7 +276,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 							var arrivals = bus.values;
 							arrivals.forEach((arrival) => {
 								if (arrival.seconds > 59 && arrival.seconds < 120)
-									answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
+									answer += "1 minute, " + (arrival.seconds - 60) + " seconds.\n";
 								else if (arrival.seconds < 60)
 									answer += arrival.seconds + " seconds.\n";
 								else
@@ -301,9 +303,10 @@ function useNextbus(stop, senderID, callSendAPI) {
 
 // get next buses for Waterloo/GRT buses - requires specific API
 // TODO: use an API that's more recent and consistently maintained
-function getWaterlooBus(stopid, senderID, callSendAPI) {
+function getWaterlooBus(stop, senderID, callSendAPI) {
 	new Promise((resolve, reject) => {
 		var http = require('http');
+		var stopid = stop.localid
 		var url = "http://nwoodthorpe.com/grt/V2/livetime.php?stop=" + stopid;
 
 		http.get(url, function (res) {
@@ -330,6 +333,27 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 						// as to "patch" the code while making minimal changes.
 						var hasRealTime = arrivals.reduce((acc, arrival) => {
 							if (arrival.hasRealTime) {
+								var tz = require("tz-lookup");
+								debug("got tz");
+								var time = require('timezone-js');
+								var now = new timezoneJS.Date(tz(stop.location.coordinates[1], stop.location.coordinates[0]));
+								debug(now);
+								debug(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
+								debug("lat:" + stop.location.coordinates[1]);
+								debug("long:" + stop.location.coordinates[1]);
+
+								
+								waitTimeSeconds = arrival.departure - now.getHours()*3600 - now.getMinutes()*60 - now.getSeconds();
+								
+								if(waitTimeSeconds%60==1) waitTimeSeconds--; // so we never have to write "second"
+
+								if(waitTimeSeconds < 55) waitTimeSeconds = "Now";
+								else if(waitTimeSeconds <= 60) waitTimeSeconds = waitTimeSeconds + " seconds"
+								else if(waitTimeSeconds < 120) waitTimeSeconds = "1 minute, " + (waitTimeSeconds-60) + " seconds"
+								else waitTimeSeconds = Math.floor(waitTimeSeconds/60) + " minutes, " + (waitTimeSeconds%60) + " seconds"
+
+								// delete block
+							/*
 								// convert from seconds of day to hh:mm:ss in 24-hour time
 								// TODO show time remaining until bus departs instead
 								const fromMinutes = function (minutes) {
@@ -350,8 +374,8 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 									else if (num < 10) n = String.prototype.concat(0, num);
 									return n;
 								};
-								const seconds = arrival.departure;
-								answer += `${fromSeconds(seconds)}\n`;
+							*/
+								answer += waitTimeSeconds;
 								return true;
 							}
 							return acc;
