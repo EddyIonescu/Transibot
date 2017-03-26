@@ -334,47 +334,27 @@ function getWaterlooBus(stop, senderID, callSendAPI) {
 						var hasRealTime = arrivals.reduce((acc, arrival) => {
 							if (arrival.hasRealTime) {
 								var tz = require("tz-lookup");
-								debug("got tz");
-								var time = require('timezone-js');
-								var now = new timezoneJS.Date(tz(stop.location.coordinates[1], stop.location.coordinates[0]));
+								var moment = require("moment-timezone");
+								var timeZone = tz(stop.location.coordinates[1], stop.location.coordinates[0]);
+								
+								var now = new Date(Date.now() - 60*1000*moment.tz.zone(timeZone).offset(Date.now()));
+
+								debug(timeZone);
 								debug(now);
 								debug(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
 								debug("lat:" + stop.location.coordinates[1]);
 								debug("long:" + stop.location.coordinates[1]);
-
 								
-								waitTimeSeconds = arrival.departure - now.getHours()*3600 - now.getMinutes()*60 - now.getSeconds();
+								var waitTimeSeconds = arrival.departure - now.getHours()*3600 - now.getMinutes()*60 - now.getSeconds();
 								
+								waitTimeSeconds -= 20; // since we're only looking at the departure time
 								if(waitTimeSeconds%60==1) waitTimeSeconds--; // so we never have to write "second"
 
-								if(waitTimeSeconds < 55) waitTimeSeconds = "Now";
+								if(waitTimeSeconds < 25) waitTimeSeconds = "Now";
 								else if(waitTimeSeconds <= 60) waitTimeSeconds = waitTimeSeconds + " seconds"
 								else if(waitTimeSeconds < 120) waitTimeSeconds = "1 minute, " + (waitTimeSeconds-60) + " seconds"
 								else waitTimeSeconds = Math.floor(waitTimeSeconds/60) + " minutes, " + (waitTimeSeconds%60) + " seconds"
 
-								// delete block
-							/*
-								// convert from seconds of day to hh:mm:ss in 24-hour time
-								// TODO show time remaining until bus departs instead
-								const fromMinutes = function (minutes) {
-									var modulo = minutes % 60;
-									return String.prototype.concat(
-										format(((minutes - modulo) / 60) % 24), ":", format(modulo)
-									);
-								};
-								const fromSeconds = function (seconds) {
-									var modulo = seconds % 60;
-									return String.prototype.concat(
-										fromMinutes((seconds - modulo) / 60), ":", format(modulo)
-									);
-								};
-								const format = function (num) {
-									var n = String(num);
-									if (num === 0) n = '00';
-									else if (num < 10) n = String.prototype.concat(0, num);
-									return n;
-								};
-							*/
 								answer += waitTimeSeconds;
 								return true;
 							}
