@@ -22,6 +22,8 @@ module.exports = {
 			).toArray((err, db_stops) => {
 				// sends user list of stops to choose from
 				getWhichStop(senderID, callSendAPI, db_stops, lat, long);
+
+				// TODO here add code to skip to closest stop if it's s clear winner (only one <3m away)
 			});
 		});
 	},
@@ -44,7 +46,7 @@ module.exports = {
 					}
 					else if (stop.agency.name === "waterloo-grt") {
 						// Waterloo has its own API
-						getWaterlooBus(stop.localid, senderID, callSendAPI);
+						getWaterlooBus(stop, senderID, callSendAPI);
 					}
 					else if (stop.agency.realtime.nextbusagencyid !== "") {
 						// all other nextbus transit agencies - though Toronto will have to be handled differently
@@ -274,7 +276,7 @@ function useNextbus(stop, senderID, callSendAPI) {
 							var arrivals = bus.values;
 							arrivals.forEach((arrival) => {
 								if (arrival.seconds > 59 && arrival.seconds < 120)
-									answer += "One minute, " + (arrival.seconds - 60) + " seconds.\n";
+									answer += "1 minute, " + (arrival.seconds - 60) + " seconds.\n";
 								else if (arrival.seconds < 60)
 									answer += arrival.seconds + " seconds.\n";
 								else
@@ -301,9 +303,10 @@ function useNextbus(stop, senderID, callSendAPI) {
 
 // get next buses for Waterloo/GRT buses - requires specific API
 // TODO: use an API that's more recent and consistently maintained
-function getWaterlooBus(stopid, senderID, callSendAPI) {
+function getWaterlooBus(stop, senderID, callSendAPI) {
 	new Promise((resolve, reject) => {
 		var http = require('http');
+		var stopid = stop.localid
 		var url = "http://nwoodthorpe.com/grt/V2/livetime.php?stop=" + stopid;
 
 		http.get(url, function (res) {
@@ -330,28 +333,29 @@ function getWaterlooBus(stopid, senderID, callSendAPI) {
 						// as to "patch" the code while making minimal changes.
 						var hasRealTime = arrivals.reduce((acc, arrival) => {
 							if (arrival.hasRealTime) {
-								// convert from seconds of day to hh:mm:ss in 24-hour time
-								// TODO show time remaining until bus departs instead
-								const fromMinutes = function (minutes) {
-									var modulo = minutes % 60;
-									return String.prototype.concat(
-										format(((minutes - modulo) / 60) % 24), ":", format(modulo)
-									);
-								};
-								const fromSeconds = function (seconds) {
-									var modulo = seconds % 60;
-									return String.prototype.concat(
-										fromMinutes((seconds - modulo) / 60), ":", format(modulo)
-									);
-								};
-								const format = function (num) {
-									var n = String(num);
-									if (num === 0) n = '00';
-									else if (num < 10) n = String.prototype.concat(0, num);
-									return n;
-								};
-								const seconds = arrival.departure;
-								answer += `${fromSeconds(seconds)}\n`;
+								var tz = require("tz-lookup");
+								var moment = require("moment-timezone");
+								var timeZone = tz(stop.location.coordinates[1], stop.location.coordinates[0]);
+								
+								var now = new Date(Date.now() - 60*1000*moment.tz.zone(timeZone).offset(Date.now()));
+
+								debug(timeZone);
+								debug(now);
+								debug(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
+								debug("lat:" + stop.location.coordinates[1]);
+								debug("long:" + stop.location.coordinates[1]);
+								
+								var waitTimeSeconds = arrival.departure - now.getHours()*3600 - now.getMinutes()*60 - now.getSeconds();
+								
+								waitTimeSeconds -= 20; // since we're only looking at the departure time
+								if(waitTimeSeconds%60==1) waitTimeSeconds--; // so we never have to write "second"
+
+								if(waitTimeSeconds < 25) waitTimeSeconds = "Now";
+								else if(waitTimeSeconds <= 60) waitTimeSeconds = waitTimeSeconds + " seconds"
+								else if(waitTimeSeconds < 120) waitTimeSeconds = "1 minute, " + (waitTimeSeconds-60) + " seconds"
+								else waitTimeSeconds = Math.floor(waitTimeSeconds/60) + " minutes, " + (waitTimeSeconds%60) + " seconds"
+
+								answer += waitTimeSeconds;
 								return true;
 							}
 							return acc;

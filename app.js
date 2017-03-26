@@ -21,7 +21,6 @@ const
   express = require('express'),
   https = require('https'),
   request = require('request'),
-  grt_stops = require('./grt_stops.js'),
   transitime = require('./transitime.js');
 
 var app = express();
