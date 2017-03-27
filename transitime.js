@@ -336,26 +336,61 @@ function getWaterlooBus(stop, senderID, callSendAPI) {
 								var tz = require("tz-lookup");
 								var moment = require("moment-timezone");
 								var timeZone = tz(stop.location.coordinates[1], stop.location.coordinates[0]);
-								
-								var now = new Date(Date.now() - 60*1000*moment.tz.zone(timeZone).offset(Date.now()));
+
+								var now = new Date(Date.now() - 60 * 1000 * moment.tz.zone(timeZone).offset(Date.now()));
 
 								debug(timeZone);
 								debug(now);
 								debug(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
 								debug("lat:" + stop.location.coordinates[1]);
 								debug("long:" + stop.location.coordinates[1]);
-								
-								var waitTimeSeconds = arrival.departure - now.getHours()*3600 - now.getMinutes()*60 - now.getSeconds();
-								
+
+								var waitTimeSeconds = arrival.departure - now.getHours() * 3600 - now.getMinutes() * 60 - now.getSeconds();
+
 								waitTimeSeconds -= 20; // since we're only looking at the departure time
-								if(waitTimeSeconds%60==1) waitTimeSeconds--; // so we never have to write "second"
+								if (waitTimeSeconds % 60 == 1) waitTimeSeconds--; // so we never have to write "second"
 
-								if(waitTimeSeconds < 25) waitTimeSeconds = "Now";
-								else if(waitTimeSeconds <= 60) waitTimeSeconds = waitTimeSeconds + " seconds"
-								else if(waitTimeSeconds < 120) waitTimeSeconds = "1 minute, " + (waitTimeSeconds-60) + " seconds"
-								else waitTimeSeconds = Math.floor(waitTimeSeconds/60) + " minutes, " + (waitTimeSeconds%60) + " seconds"
+								if (waitTimeSeconds < 45 * 60) {
+									if (waitTimeSeconds < 25) waitTimeSeconds = "Now";
+									else if (waitTimeSeconds <= 60) waitTimeSeconds = waitTimeSeconds + " seconds"
+									else if (waitTimeSeconds < 120) waitTimeSeconds = "1 minute, " + (waitTimeSeconds - 60) + " seconds"
+									else waitTimeSeconds = Math.floor(waitTimeSeconds / 60) + " minutes, " + (waitTimeSeconds % 60) + " seconds"
+									answer += waitTimeSeconds;
+								}
+								else {
+									// convert from seconds of day to hh:mm:ss in 24-hour time
+									// only if time of departure is over 45 minutes away
+									var isAM = false;
+									const fromMinutes = function (minutes) {
+										var modulo = minutes % 60;
+										var hour = (((minutes - modulo) / 60) % 24);
+										if (hour < 12) {
+												 isAM = true
+												 if(hour == 0) hour = 12;
+										}
+										else {
+											hour -= 12;
+										}
+										return String.prototype.concat(
+											hour, ":", format(modulo)
+										);
+									};
+									const fromSeconds = function (seconds) {
+										var modulo = seconds % 60;
+										return String.prototype.concat(
+											fromMinutes((seconds - modulo) / 60), ":", format(modulo), isAM ? " AM" : " PM"
+										);
+									};
+									const format = function (num) {
+										var n = String(num);
+										if (num === 0) n = '00';
+										else if (num < 10) n = String.prototype.concat(0, num);
+										return n;
+									};
+									const seconds = arrival.departure;
+									answer += `${fromSeconds(seconds)}\n`;
+								}
 
-								answer += waitTimeSeconds;
 								return true;
 							}
 							return acc;
