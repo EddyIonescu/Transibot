@@ -16,7 +16,7 @@
 
 const
   bodyParser = require('body-parser'),
-  config = require('./config/devConfig.json'),
+  config = require('./config/prodConfig.json'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),
